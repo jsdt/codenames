@@ -1,0 +1,130 @@
+{
+    "grid": {
+        "0": {
+            "word": "apple",
+            "color": "red",
+            "revealed": false
+        },
+        "1": {
+            "word": "apple",
+            "color": "red",
+            "revealed": false
+        },
+        "2": {
+            "word": "apple",
+            "color": "red",
+            "revealed": false
+        },
+        "3": {
+            "word": "apple",
+            "color": "red",
+            "revealed": false
+        },
+        "4": {
+            "word": "apple",
+            "color": "red",
+            "revealed": false
+        },
+        "5": {
+            "word": "apple",
+            "color": "red",
+            "revealed": false
+        },
+        "6": {
+            "word": "apple",
+            "color": "red",
+            "revealed": false
+        },
+        "7": {
+            "word": "apple",
+            "color": "red",
+            "revealed": false
+        },
+        "8": {
+            "word": "apple",
+            "color": "red",
+            "revealed": false
+        },
+        "9": {
+            "word": "apple",
+            "color": "red",
+            "revealed": false
+        },
+        "10": {
+            "word": "apple",
+            "color": "red",
+            "revealed": false
+        },
+        "11": {
+            "word": "apple",
+            "color": "red",
+            "revealed": false
+        },
+        "12": {
+            "word": "apple",
+            "color": "red",
+            "revealed": false
+        },
+        "13": {
+            "word": "apple",
+            "color": "red",
+            "revealed": false
+        },
+        "14": {
+            "word": "apple",
+            "color": "red",
+            "revealed": false
+        },
+        "15": {
+            "word": "apple",
+            "color": "red",
+            "revealed": false
+        },
+        "16": {
+            "word": "apple",
+            "color": "red",
+            "revealed": false
+        },
+        "17": {
+            "word": "apple",
+            "color": "red",
+            "revealed": false
+        },
+        "18": {
+            "word": "apple",
+            "color": "red",
+            "revealed": false
+        },
+        "19": {
+            "word": "apple",
+            "color": "red",
+            "revealed": false
+        },
+        "20": {
+            "word": "apple",
+            "color": "red",
+            "revealed": false
+        },
+        "21": {
+            "word": "apple",
+            "color": "red",
+            "revealed": false
+        },
+        "22": {
+            "word": "apple",
+            "color": "red",
+            "revealed": false
+        },
+        "23": {
+            "word": "apple",
+            "color": "red",
+            "revealed": false
+        },
+        "24": {
+            "word": "apple",
+            "color": "red",
+            "revealed": false
+        }
+    },
+    "current_turn": "red"
+}
