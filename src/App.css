@@ -7,7 +7,7 @@
   height: 40vmin;
   pointer-events: none;
 }
-.box {
+.mybox {
   display: flex;
 }
 .container {
