@@ -46,7 +46,8 @@ function snapshotToGameState(snap: DataSnapshot): GameState {
   return {
     grid: grid,
     current_turn: snap.child("current_turn").val(),
-    winner: snap.child("winner").val()
+    winner: snap.child("winner").val(),
+    round_id: snap.child("round_id").val(),
   };
 
 }
@@ -77,13 +78,28 @@ function computeWordsLeft(grid: Map<string, WordInfo>): ScoreBoard {
 }
 
 const FullGameView = () => {
-  // TODO: Have a unique id for the round of the game, so we can store that we are spymaster for a round. Then if a new game is started, we can reset it.
-  const [isSpyMaster, setSpyMaster] = useState(false);
-  // const [snapshot, loading, error] = useObject(ref(database, 'games/test/grid'));
   const [snapshot, loading, error] = useObject(ref(database, 'games/test'));
   const gameState: GameState | null = snapshot ? snapshotToGameState(snapshot) : null;
   const score = gameState ? computeWordsLeft(gameState!.grid) : null;
   console.log(JSON.stringify(score));
+  // We set the spymaster for the current round, so it is reset if someone starts a new game.
+  const [spyMasterRound, setSpyMaster] = useState<string | null>(null);
+  const isSpyMaster: boolean = spyMasterRound !== null && gameState != null && spyMasterRound === gameState!.round_id;
+  const setSpyMasterHelper = (b: boolean) => {
+    if (b) {
+      setSpyMaster(gameState!.round_id);
+    } else {
+      setSpyMaster(null);
+    }
+  }
+
+  const endTurn = () => {
+    var nextTurn = "red";
+    if (gameState!.current_turn === "red") {
+      nextTurn = "blue";
+    }
+    set(ref(database, "games/test/current_turn"), nextTurn);
+  }
 
   const onClick = (key: string) => {
     if (gameState) {
@@ -141,11 +157,12 @@ const FullGameView = () => {
       }
       <Divider />
       <FormGroup>
-        <FormControlLabel control={<Switch checked={isSpyMaster} onChange={(e) => setSpyMaster(e.target.checked)} />} label="Spymaster" />
+        <FormControlLabel control={<Switch checked={isSpyMaster} onChange={(e) => setSpyMasterHelper(e.target.checked)} />} label="Spymaster" />
       </FormGroup>
 
       {gameState && gameState!.winner !== null && `The ${gameState!.winner} team won!`}
       {gameState && gameState!.winner === null && `It is the ${gameState!.current_turn} team's turn!`}
+      {gameState && gameState!.winner === null && <Button onClick={endTurn}>End Turn</Button>}
 
 
     </div>
@@ -156,6 +173,7 @@ interface GameState {
   grid: Map<string, WordInfo>
   current_turn: "red" | "blue";
   winner: "red" | "blue" | null;
+  round_id: string;
 
 }
 

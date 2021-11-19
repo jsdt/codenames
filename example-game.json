@@ -126,5 +126,6 @@
             "isRevealed": false
         }
     },
-    "current_turn": "red"
+    "current_turn": "red",
+    "round_id": "whatever2"
 }
