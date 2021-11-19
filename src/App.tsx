@@ -1,8 +1,9 @@
 import React from 'react';
 import logo from './logo.svg';
 import './App.css';
-import { writeGameData } from './createGame';
+import { writeStartGameData } from './createGame';
 import { generateRandomGameId } from './util';
+import { getGameDataOnce } from './getters';
 
 function App() {
   return (
@@ -13,8 +14,12 @@ function App() {
           Edit <code>src/App.tsx</code> and save to reload.
         </p>
 
-        <button onClick={() => writeGameData(generateRandomGameId())}>
+        <button onClick={() => writeStartGameData(generateRandomGameId())}>
           Write to RTDB (Generate Game)
+        </button>
+
+        <button onClick={() => getGameDataOnce('d8wrk')}>
+          Read from RTDB Once (GameId hardcoded)
         </button>
         <a
           className="App-link"

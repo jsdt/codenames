@@ -5,7 +5,7 @@ import { wordList } from './wordList';
 import { ToastBody } from 'react-bootstrap';
 
 // Generate new board game and write initial state to RTDB
-export function writeGameData(gameId: string) {
+export function writeStartGameData(gameId: string) {
   const gameDictionary: string[] = generateGameDictionary();
   const gameGrid: {[key: string]: any} = generateGameGrid(gameDictionary);
   const gameData: any = generateGameData();
