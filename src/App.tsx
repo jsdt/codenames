@@ -4,6 +4,7 @@ import './App.css';
 import { writeStartGameData } from './createGame';
 import { generateRandomGameId } from './util';
 import { getGameDataOnce } from './getters';
+import {setCurrentTurn, revealWord, setWinner} from './setters';
 
 function App() {
   return (
@@ -20,6 +21,22 @@ function App() {
 
         <button onClick={() => getGameDataOnce('d8wrk')}>
           Read from RTDB Once (GameId hardcoded)
+        </button>
+
+        <button onClick={() => setCurrentTurn('d8wrk', 'red')}>
+          Update RTDB Team to Red
+        </button>
+
+        <button onClick={() => setCurrentTurn('d8wrk', 'blue')}>
+          Update RTDB Team to Blue
+        </button>
+
+        <button onClick={() => revealWord('d8wrk', '0')}>
+          Reveal word at grid location (0)
+        </button>
+
+        <button onClick={() => setWinner('d8wrk', 'red')}>
+          Set Winner to Red
         </button>
         <a
           className="App-link"

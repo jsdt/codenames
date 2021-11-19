@@ -40,12 +40,4 @@ export function getGameDataOnce(gameId: string){
     }).catch((error) => {
         console.error(error);
     });
-
-
-
-    const gameDataRef: any = ref(database, 'games/' + gameId);
-    onValue(gameDataRef, (snapshot) => {
-        const data = snapshot.val();
-        // TODO: Add function & listener
-    });
 }
