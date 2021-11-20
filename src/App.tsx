@@ -14,6 +14,7 @@ import { Divider, FormControlLabel, FormGroup, Grid, Switch } from '@mui/materia
 import { styled } from '@mui/material/styles';
 import Box from '@mui/material/Box';
 import Paper from '@mui/material/Paper';
+import { writeStartGameData } from './createGame';
 
 const firebaseConfig = {
   databaseURL: "https://testproj-jeffdt-default-rtdb.europe-west1.firebasedatabase.app"
@@ -32,6 +33,9 @@ function App() {
   return (
     <div>
       <FullGameView />
+      <Button onClick={() => { writeStartGameData(ref(database, "games/test")) }}>
+        Start New Game
+      </Button>
     </div>
   );
 }
@@ -56,6 +60,11 @@ interface ScoreBoard {
   blueWordsLeft: number;
   redWordsLeft: number;
 }
+
+function scoreString(sb: ScoreBoard): string {
+  return `Blue words remaining: ${sb.blueWordsLeft}; Red words remaining: ${sb.redWordsLeft}`;
+}
+
 function computeWordsLeft(grid: Map<string, WordInfo>): ScoreBoard {
   var blueWordsLeft = 0;
   var redWordsLeft = 0;
@@ -160,8 +169,15 @@ const FullGameView = () => {
         <FormControlLabel control={<Switch checked={isSpyMaster} onChange={(e) => setSpyMasterHelper(e.target.checked)} />} label="Spymaster" />
       </FormGroup>
 
-      {gameState && gameState!.winner !== null && `The ${gameState!.winner} team won!`}
-      {gameState && gameState!.winner === null && `It is the ${gameState!.current_turn} team's turn!`}
+      <p>
+        {gameState && gameState!.winner !== null && `The ${gameState!.winner} team won!`}
+      </p>
+      <p>
+        {gameState && gameState!.winner === null && `It is the ${gameState!.current_turn} team's turn!`}
+      </p>
+      <p>
+        {score !== null && scoreString(score!)}
+      </p>
       {gameState && gameState!.winner === null && <Button onClick={endTurn}>End Turn</Button>}
 
 
