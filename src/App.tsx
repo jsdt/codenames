@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import logo from './logo.svg';
 import './App.css';
 import { ref, getDatabase, DataSnapshot, set, update } from 'firebase/database';
@@ -10,11 +10,12 @@ import Col from 'react-bootstrap/Col';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import { useState } from 'react';
 import Button from 'react-bootstrap/Button'
-import { Divider, FormControlLabel, FormGroup, Grid, Switch } from '@mui/material';
+import { Divider, FormControlLabel, FormGroup, Grid, Switch as SwitchButton } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import Box from '@mui/material/Box';
 import Paper from '@mui/material/Paper';
 import { writeStartGameData } from './createGame';
+import { BrowserRouter, Route, useParams, Routes } from "react-router-dom";
 
 const firebaseConfig = {
   databaseURL: "https://testproj-jeffdt-default-rtdb.europe-west1.firebasedatabase.app"
@@ -31,12 +32,12 @@ const Item = styled(Paper)(({ theme }) => ({
 
 function App() {
   return (
-    <div>
-      <FullGameView />
-      <Button onClick={() => { writeStartGameData(ref(database, "games/test")) }}>
-        Start New Game
-      </Button>
-    </div>
+    <BrowserRouter>
+      <Routes>
+        <Route path="/:gameId" element={<GameView />} />
+        <Route path="/" element={<GameView />} />
+      </Routes>
+    </BrowserRouter>
   );
 }
 
@@ -86,13 +87,62 @@ function computeWordsLeft(grid: Map<string, WordInfo>): ScoreBoard {
   }
 }
 
-const FullGameView = () => {
-  const [snapshot, loading, error] = useObject(ref(database, 'games/test'));
-  const gameState: GameState | null = snapshot ? snapshotToGameState(snapshot) : null;
-  const score = gameState ? computeWordsLeft(gameState!.grid) : null;
-  console.log(JSON.stringify(score));
-  // We set the spymaster for the current round, so it is reset if someone starts a new game.
+
+const GameView = () => {
+  const params = useParams();
+  // const gameId: string = encodeURIComponent(params.gameId || "test");
+  const gameId: string = btoa(params.gameId || "test");
+  return (
+    <div>
+      <FullGameView gameId={gameId} />
+    </div>
+  );
+}
+
+interface GameProps {
+  gameId: string
+}
+
+const ErrorScreen = () => {
+  return (
+    <div>
+      <p> Error! Maybe refresh? </p>
+    </div>
+  );
+}
+const LoadingScreen = () => {
+  return (
+    <div>
+      <p> Loading... </p>
+    </div>
+  );
+}
+
+const FullGameView = (props: GameProps) => {
+  const gameId: string = props.gameId;
+  const gameRef = ref(database, `games/${gameId}`);
+  function createGame(): Promise<void> {
+    return writeStartGameData(gameRef);
+  }
+  const [snapshot, loading, error] = useObject(gameRef);
   const [spyMasterRound, setSpyMaster] = useState<string | null>(null);
+  useEffect(
+    () => {
+      if (!loading && !error && snapshot!.val() === null) {
+        createGame();
+      }
+    },
+    [snapshot]
+  );
+  if (error) {
+    return <ErrorScreen />;
+  } else if (loading || snapshot!.val() === null) {
+    return <LoadingScreen />;
+  }
+  const gameState: GameState | null = snapshot ? snapshotToGameState(snapshot) : null;
+
+  const score = gameState ? computeWordsLeft(gameState!.grid) : null;
+  // We set the spymaster for the current round, so it is reset if someone starts a new game.
   const isSpyMaster: boolean = spyMasterRound !== null && gameState != null && spyMasterRound === gameState!.round_id;
   const setSpyMasterHelper = (b: boolean) => {
     if (b) {
@@ -107,7 +157,7 @@ const FullGameView = () => {
     if (gameState!.current_turn === "red") {
       nextTurn = "blue";
     }
-    set(ref(database, "games/test/current_turn"), nextTurn);
+    set(ref(database, `games/${gameId}/current_turn`), nextTurn);
   }
 
   const onClick = (key: string) => {
@@ -125,21 +175,21 @@ const FullGameView = () => {
           winner = "blue";
         }
         set(
-          ref(database, `games/test/winner`),
+          ref(database, `games/${gameId}/winner`),
           winner
         );
         return;
       }
       if (wordInfo.color === "red" && score!.redWordsLeft === 1) {
         set(
-          ref(database, `games/test/winner`),
+          ref(database, `games/${gameId}/winner`),
           "red"
         );
         return;
       }
       if (wordInfo.color === "blue" && score!.blueWordsLeft === 1) {
         set(
-          ref(database, `games/test/winner`),
+          ref(database, `games/${gameId}/winner`),
           "blue"
         );
         return;
@@ -151,7 +201,7 @@ const FullGameView = () => {
       var batch: { [k: string]: any } = {};
       batch["current_turn"] = nextTurn;
       batch[`grid/${key}/isRevealed`] = true;
-      update(ref(database, `games/test`), batch);
+      update(gameRef, batch);
     }
   }
 
@@ -166,7 +216,7 @@ const FullGameView = () => {
       }
       <Divider />
       <FormGroup>
-        <FormControlLabel control={<Switch checked={isSpyMaster} onChange={(e) => setSpyMasterHelper(e.target.checked)} />} label="Spymaster" />
+        <FormControlLabel control={<SwitchButton checked={isSpyMaster} onChange={(e) => setSpyMasterHelper(e.target.checked)} />} label="Spymaster" />
       </FormGroup>
 
       <p>
@@ -179,8 +229,11 @@ const FullGameView = () => {
         {score !== null && scoreString(score!)}
       </p>
       {gameState && gameState!.winner === null && <Button onClick={endTurn}>End Turn</Button>}
-
-
+      <div>
+        <Button onClick={createGame}>
+          Start New Game
+        </Button>
+      </div>
     </div>
   );
 };
@@ -242,12 +295,16 @@ const GridView = (props: GridProps) => {
           <Container fluid>
 
             {slots.map((r) => (
-              <Row>
-                {slots.map((c) => (
-                  <Col>
-                    <WordView wordInfo={props.game.grid.get(`${r * 5 + c}`)!} isSpyMaster={props.isSpyMaster} gameOver={props.game.winner != null} onClick={() => { props.onClick(`${r * 5 + c}`) }} />
-                  </Col>
-                ))}
+              <Row key={`${r}`}>
+                {slots.map((c) => {
+                  const wordKey = `${r * 5 + c}`;
+                  const gridKey = `${props.game.round_id}/${wordKey}`;
+                  return (
+                    <Col key={gridKey}>
+                      <WordView wordInfo={props.game.grid.get(wordKey)!} isSpyMaster={props.isSpyMaster} gameOver={props.game.winner != null} onClick={() => { props.onClick(wordKey) }} />
+                    </Col>
+                  )
+                })}
 
               </Row>
             ))}
