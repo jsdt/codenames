@@ -23,12 +23,6 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const database = getDatabase(app);
 
-const Item = styled(Paper)(({ theme }) => ({
-  ...theme.typography.body2,
-  padding: theme.spacing(1),
-  textAlign: 'center',
-  color: theme.palette.text.secondary,
-}));
 
 function App() {
   return (
@@ -69,7 +63,6 @@ function scoreString(sb: ScoreBoard): string {
 function computeWordsLeft(grid: Map<string, WordInfo>): ScoreBoard {
   var blueWordsLeft = 0;
   var redWordsLeft = 0;
-  console.log(JSON.stringify(grid));
   grid.forEach((wordInfo) => {
     if (wordInfo.isRevealed) {
       return;
@@ -267,6 +260,7 @@ const colorToVariant = {
   "black": "dark",
 }
 
+// TODO: Switch to using an MUI button.
 function WordView(props: WordProps) {
   var variant = "light";
   if (props.isSpyMaster || props.wordInfo.isRevealed || props.gameOver) {
@@ -274,7 +268,7 @@ function WordView(props: WordProps) {
   }
   let isDisabled = props.wordInfo.isRevealed || props.gameOver;
   return <div>
-    <Button variant={variant} disabled={isDisabled} onClick={props.onClick}>
+    <Button variant={variant} disabled={isDisabled} onClick={props.onClick} >
       {props.wordInfo.word}
     </Button>
   </div>;
@@ -286,29 +280,35 @@ interface GridProps {
   onClick: (s: string) => any;
 }
 
+const boxStyle = {
+  alignItems: "center",
+  justifyContent: "center",
+  display: "flex"
+};
+
 const GridView = (props: GridProps) => {
 
   return (
     <div>
       {
         (
-          <Container fluid>
+          <Grid container spacing={2} columns={40}>
+            {
 
-            {slots.map((r) => (
-              <Row key={`${r}`}>
-                {slots.map((c) => {
-                  const wordKey = `${r * 5 + c}`;
-                  const gridKey = `${props.game.round_id}/${wordKey}`;
-                  return (
-                    <Col key={gridKey}>
-                      <WordView wordInfo={props.game.grid.get(wordKey)!} isSpyMaster={props.isSpyMaster} gameOver={props.game.winner != null} onClick={() => { props.onClick(wordKey) }} />
-                    </Col>
-                  )
-                })}
+              Array.from(props.game.grid).map(([key, wordInfo]) => {
+                const gridKey = `${props.game.round_id}/${key}`;
+                return (
+                  <Grid item key={gridKey} xs={8}>
+                    <div style={boxStyle}>
 
-              </Row>
-            ))}
-          </Container>
+                      <WordView wordInfo={wordInfo} isSpyMaster={props.isSpyMaster} gameOver={props.game.winner != null} onClick={() => { props.onClick(key) }} />
+                    </div>
+                  </Grid>
+                );
+
+              })
+            }
+          </Grid>
         )
       }
 
@@ -316,5 +316,6 @@ const GridView = (props: GridProps) => {
     </div>
   );
 };
+
 
 export default App;

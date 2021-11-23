@@ -10,6 +10,10 @@
 .mybox {
   display: flex;
 }
+.gridbox {
+  align-items: center;
+  justify-content: center;
+}
 .container {
   max-width: '100%';
   display: flex;
