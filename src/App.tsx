@@ -9,19 +9,31 @@ import Row from 'react-bootstrap/Row';
 import Col from 'react-bootstrap/Col';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import { useState } from 'react';
-import Button from 'react-bootstrap/Button'
-import { Divider, FormControlLabel, FormGroup, Grid, Switch as SwitchButton } from '@mui/material';
+import BsButton from 'react-bootstrap/Button';
+import LoadingButton from '@mui/lab/LoadingButton';
+import LoginIcon from '@mui/icons-material/Login';
+import { Button, Divider, FormControl, FormControlLabel, FormGroup, FormHelperText, Grid, Input, InputLabel, MenuItem, Select, Switch as SwitchButton, TextField } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import Box from '@mui/material/Box';
 import Paper from '@mui/material/Paper';
 import { writeStartGameData } from './createGame';
 import { BrowserRouter, Route, useParams, Routes } from "react-router-dom";
+import { getAuth, updateProfile, signInAnonymously, signInWithCredential, signOut, onAuthStateChanged, updateCurrentUser } from "firebase/auth";
+import { useAuthState } from 'react-firebase-hooks/auth';
+
 
 const firebaseConfig = {
-  databaseURL: "https://testproj-jeffdt-default-rtdb.europe-west1.firebasedatabase.app"
+  apiKey: "AIzaSyAyXLgcQ46iFKZW3jZdcV07w9EuBemi-yc",
+  authDomain: "testproj-jeffdt.firebaseapp.com",
+  databaseURL: "https://testproj-jeffdt-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "testproj-jeffdt",
+  storageBucket: "testproj-jeffdt.appspot.com",
+  messagingSenderId: "781325435126",
+  appId: "1:781325435126:web:0f56aad3b2b3db8c0becd7"
 };
 const app = initializeApp(firebaseConfig);
 const database = getDatabase(app);
+const auth = getAuth(app);
 
 
 function App() {
@@ -81,19 +93,115 @@ function computeWordsLeft(grid: Map<string, WordInfo>): ScoreBoard {
 }
 
 
+interface UserInfo {
+  displayName: string
+  uid: string
+}
+
 const GameView = () => {
   const params = useParams();
   // const gameId: string = encodeURIComponent(params.gameId || "test");
   const gameId: string = btoa(params.gameId || "test");
+  const [name, setName] = useLocalStorage<UserInfo | null>("userInfo", null);
+  const [user, loading, error] = useAuthState(auth);
+  // useAuthState isn't updated when we update the profile (to set the display name), so we use the hook to force a rerender.
+  const [didLogin, setProfileUpdated] = useState<boolean>(false);
+  async function logIn(name: string, team: string): Promise<void> {
+    const creds = await signInAnonymously(auth);
+    console.log(creds);
+    await updateProfile(creds.user, { displayName: name });
+    setProfileUpdated(true);
+  }
+
+  function logOut(): void {
+    setName(null);
+    signOut(auth);
+    setProfileUpdated(false);
+  }
+
+  function userInfo(): UserInfo | null {
+    // Note that we need to use auth.currentUser instead of user because it isn't updated when the profile changes.
+    const cu = auth.currentUser
+    if (cu! && cu.displayName) {
+      return { displayName: cu!.displayName!, uid: cu!.uid };
+    } else {
+      return null;
+    }
+  }
+
+  const fullyLoggedIn = auth.currentUser && auth.currentUser!.displayName
+  if (error) {
+    return <ErrorScreen />
+  } else if (loading) {
+    return <LoadingScreen />
+  } else if (fullyLoggedIn) {
+    console.log("I'm fully logged in");
+    console.log(`User: ${JSON.stringify(user)}`);
+    return (
+      <div>
+        <FullGameView gameId={gameId} userInfo={userInfo()!} logOut={logOut} />
+      </div>
+    );
+  } else {
+    console.log(`User: ${JSON.stringify(user)}`);
+    console.log(name);
+    return (<div> <LoginView onSubmit={logIn} /></div>);
+  }
+}
+
+interface LoginProps {
+  onSubmit(name: string, team: string): Promise<void>
+}
+
+const LoginView = (props: LoginProps) => {
+  const [team, setTeam] = useState("Random");
+  const [name, setName] = useState("");
+  const [isLoggingIn, setLoggingIn] = useState(false);
+
+  const onSubmit = () => {
+    setLoggingIn(true);
+    console.log("Going to log in!");
+    props.onSubmit(name, team).finally(() => setLoggingIn(false));
+    // console.log(`Submitted: ${name}`);
+  }
+
   return (
     <div>
-      <FullGameView gameId={gameId} />
+      <form onSubmit={onSubmit}>
+
+        <FormControl sx={{ m: 1, minWidth: 120 }}>
+          <TextField required placeholder="Your Name" type="search" label="Name" value={name} onChange={(e) => { console.log(e.target.value); setName(e.target.value); }} />
+          <FormHelperText>Enter your name.</FormHelperText>
+        </FormControl>
+        <FormControl sx={{ m: 1, minWidth: 120 }}>
+
+          <InputLabel id="initial-team-selector">Team</InputLabel>
+          <Select<string> labelId="initial-team-selector" onChange={(e) => { setTeam(e.target.value); }} value={team}>
+            <MenuItem value="Random"> <em>Random</em> </MenuItem>
+            <MenuItem value="red"> Red </MenuItem>
+            <MenuItem value="blue"> Blue </MenuItem>
+          </Select>
+          <FormHelperText>Choose a team (you can change this later).</FormHelperText>
+        </FormControl>
+        <LoadingButton endIcon={<LoginIcon />} onClick={onSubmit} variant="contained" disabled={!name} loading={isLoggingIn}>
+          Login
+        </LoadingButton>
+        {
+          /*
+        <Button onClick={onSubmit} disabled={!name}>
+          Play!
+        </Button>
+        */}
+      </form>
+
     </div>
   );
 }
 
 interface GameProps {
   gameId: string
+  userInfo: UserInfo
+  logOut: () => void
 }
 
 const ErrorScreen = () => {
@@ -111,9 +219,13 @@ const LoadingScreen = () => {
   );
 }
 
+const Lobby = () => {
+  //
+}
+
 const FullGameView = (props: GameProps) => {
   const gameId: string = props.gameId;
-  const gameRef = ref(database, `games/${gameId}`);
+  const gameRef = ref(database, `games / ${gameId}`);
   function createGame(): Promise<void> {
     return writeStartGameData(gameRef);
   }
@@ -150,7 +262,7 @@ const FullGameView = (props: GameProps) => {
     if (gameState!.current_turn === "red") {
       nextTurn = "blue";
     }
-    set(ref(database, `games/${gameId}/current_turn`), nextTurn);
+    set(ref(database, `games / ${gameId} / current_turn`), nextTurn);
   }
 
   const onClick = (key: string) => {
@@ -168,21 +280,21 @@ const FullGameView = (props: GameProps) => {
           winner = "blue";
         }
         set(
-          ref(database, `games/${gameId}/winner`),
+          ref(database, `games / ${gameId} / winner`),
           winner
         );
         return;
       }
       if (wordInfo.color === "red" && score!.redWordsLeft === 1) {
         set(
-          ref(database, `games/${gameId}/winner`),
+          ref(database, `games / ${gameId} / winner`),
           "red"
         );
         return;
       }
       if (wordInfo.color === "blue" && score!.blueWordsLeft === 1) {
         set(
-          ref(database, `games/${gameId}/winner`),
+          ref(database, `games / ${gameId} / winner`),
           "blue"
         );
         return;
@@ -193,13 +305,14 @@ const FullGameView = (props: GameProps) => {
       }
       var batch: { [k: string]: any } = {};
       batch["current_turn"] = nextTurn;
-      batch[`grid/${key}/isRevealed`] = true;
+      batch[`grid / ${key} / isRevealed`] = true;
       update(gameRef, batch);
     }
   }
 
   return (
     <div>
+      {<div><p>Hello {props.userInfo.displayName}</p> <Button onClick={props.logOut}>Logout</Button></div>}
       {error && <strong>Error: {error}</strong>}
       {loading && <span>List: Loading...</span> /* TODO: Add skeleton buttons while loading */}
       {
@@ -217,17 +330,17 @@ const FullGameView = (props: GameProps) => {
       </p>
       <p>
         {gameState && gameState!.winner === null && `It is the ${gameState!.current_turn} team's turn!`}
-      </p>
+      </p >
       <p>
         {score !== null && scoreString(score!)}
       </p>
-      {gameState && gameState!.winner === null && <Button onClick={endTurn}>End Turn</Button>}
+      {gameState && gameState!.winner === null && <BsButton onClick={endTurn}>End Turn</BsButton>}
       <div>
-        <Button onClick={createGame}>
+        <BsButton onClick={createGame}>
           Start New Game
-        </Button>
+        </BsButton>
       </div>
-    </div>
+    </div >
   );
 };
 
@@ -268,9 +381,9 @@ function WordView(props: WordProps) {
   }
   let isDisabled = props.wordInfo.isRevealed || props.gameOver;
   return <div>
-    <Button variant={variant} disabled={isDisabled} onClick={props.onClick} >
+    <BsButton variant={variant} disabled={isDisabled} onClick={props.onClick} >
       {props.wordInfo.word}
-    </Button>
+    </BsButton>
   </div>;
 }
 
@@ -316,6 +429,42 @@ const GridView = (props: GridProps) => {
     </div>
   );
 };
+
+
+// Hook
+function useLocalStorage<T>(key: string, initialValue: T): [T, (v: T) => void] {
+  // State to store our value
+  // Pass initial state function to useState so logic is only executed once
+  const [storedValue, setStoredValue] = useState(() => {
+    try {
+      // Get from local storage by key
+      const item = window.localStorage.getItem(key);
+      // Parse stored json or if none return initialValue
+      return item ? JSON.parse(item) : initialValue;
+    } catch (error) {
+      // If error also return initialValue
+      console.log(error);
+      return initialValue;
+    }
+  });
+  // Return a wrapped version of useState's setter function that ...
+  // ... persists the new value to localStorage.
+  const setValue = (value: any) => {
+    try {
+      // Allow value to be a function so we have same API as useState
+      const valueToStore =
+        value instanceof Function ? value(storedValue) : value;
+      // Save state
+      setStoredValue(valueToStore);
+      // Save to local storage
+      window.localStorage.setItem(key, JSON.stringify(valueToStore));
+    } catch (error) {
+      // A more advanced implementation would handle the error case
+      console.log(error);
+    }
+  };
+  return [storedValue, setValue];
+}
 
 
 export default App;
