@@ -127,7 +127,12 @@
                 "isRevealed": false
             }
         },
-        "current_turn": "red"
+        "current_turn": "red",
+        "history": {
+
+            "turn1": {"clue": "word", "number": 2, "guesses": []}
+
+        }
     },
     "round_id": "whatever2"
 }

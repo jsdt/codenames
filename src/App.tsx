@@ -16,7 +16,7 @@ import { Button, Divider, FormControl, FormControlLabel, FormGroup, FormHelperTe
 import { styled } from '@mui/material/styles';
 import Box from '@mui/material/Box';
 import Paper from '@mui/material/Paper';
-import { initializeGameState, initializeRoom, startGame, writeStartGameData } from './createGame';
+import { giveClue, initializeGameState, initializeRoom, startGame, startNewRound, writeStartGameData } from './createGame';
 import { BrowserRouter, Route, useParams, Routes } from "react-router-dom";
 import { getAuth, updateProfile, signInAnonymously, signInWithCredential, signOut, onAuthStateChanged, updateCurrentUser } from "firebase/auth";
 import { useAuthState } from 'react-firebase-hooks/auth';
@@ -92,12 +92,18 @@ function snapshotToRoomState(snap: DataSnapshot): RoomState {
     gs.child("grid").forEach(child => {
       grid.set(child.key!, child.val() as WordInfo);
     });
+    var current_clue: Clue | undefined = undefined;
+    if (gs.hasChild("current_clue")) {
+      current_clue = gs.child("current_clue").val() as Clue;
+    }
     gameState = {
       grid: grid,
       current_turn: gs.child("current_turn").val(),
       winner: gs.child("winner").val(),
       round_id: snap.child("round_id").val(),
+      current_clue,
       players: players,
+      history: [],
     };
 
   } else if (phase !== "lobby" && phase !== "playing") {
@@ -110,26 +116,6 @@ function snapshotToRoomState(snap: DataSnapshot): RoomState {
     spyMasters,
     gameState,
     teamsLocked
-  };
-
-}
-
-function snapshotToGameState(snap: DataSnapshot): GameState {
-  var grid: Map<string, WordInfo> = new Map();
-  snap.child("grid").forEach(child => {
-    grid.set(child.key!, child.val() as WordInfo);
-  });
-  var players: Map<string, PlayerInfo> = new Map();
-  snap.child("players").forEach(child => {
-    players.set(child.key!, child.val() as PlayerInfo);
-  });
-  return {
-    grid: grid,
-    // phase: snap.child("phase").val(),
-    current_turn: snap.child("current_turn").val(),
-    winner: snap.child("winner").val(),
-    round_id: snap.child("round_id").val(),
-    players: players,
   };
 
 }
@@ -222,6 +208,7 @@ const GetTest = () => {
     </div>
   );
 }
+
 const GameView = () => {
   const params = useParams();
   // const gameId: string = encodeURIComponent(params.gameId || "test");
@@ -433,6 +420,7 @@ const LobbyView = (p: LobbyProps) => {
   if (p.players.get(p.userInfo.uid)) {
     team = p.players.get(p.userInfo.uid)?.team;
   }
+  console.log(team);
   const canVolunteer = p.teamsLocked && team !== undefined && !p.spyMasters.get(team);
   const canBegin = team && p.spyMasters.get("red") && p.spyMasters.get("blue");
   const waitingForOtherTeam = team && p.spyMasters.get(team) && !canBegin;
@@ -454,7 +442,8 @@ const LobbyView = (p: LobbyProps) => {
         </div>
       }
       {
-        team && p.teamsLocked ||
+        // TODO: ensure both teams are nonempty.
+        team && !p.teamsLocked &&
         <Button onClick={p.lockTeams}>
           Choose Spymasters
         </Button>
@@ -482,13 +471,6 @@ interface LoadedGameProps {
   isConnected: boolean;
 }
 
-const LoadedGameView = (props: LoadedGameProps) => {
-  return (
-    <div></div>
-
-  );
-}
-
 function setTeam(gameId: string, user: UserInfo, team: "red" | "blue") {
 
   set(ref(database, `games/${gameId}/players/${user.uid}/`), { uid: user.uid, displayName: user.displayName, team: team });
@@ -503,6 +485,49 @@ function makeSpyMaster(gameRef: DatabaseReference, playerId: string, team: Team)
 
 }
 
+interface ClueProps {
+  onClue: (word: string, number: number) => void;
+}
+
+const ClueForm = (props: ClueProps) => {
+  const [word, setWord] = useState("");
+  const [number, setNumber] = useState("");
+  const onSubmit = () => {
+    props.onClue(word, parseInt(number));
+  }
+  return (
+    <div>
+      Give your team a clue:
+      <form onSubmit={onSubmit}>
+        <FormControl sx={{ m: 1, minWidth: 120 }}>
+          <TextField required placeholder="Clue Word" type="text" label="Clue" value={word} onChange={(e) => { setWord(e.target.value); }} />
+          <FormHelperText>Enter the clue word.</FormHelperText>
+        </FormControl>
+        <FormControl sx={{ m: 1, minWidth: 120 }}>
+          <TextField inputProps={{inputMode: 'numeric', pattern: '[0-9]*'}} required placeholder="Number" type="text" label="Number" value={number} onChange={(e) => { setNumber(e.target.value); }} />
+          <FormHelperText>How many words should they guess?</FormHelperText>
+        </FormControl>
+        <Button onClick={onSubmit}>
+          Give Clue
+        </Button>
+
+
+      </form>
+    </div>
+  );
+
+}
+/*
+function ClueForm(p: ClueProps) {
+
+  return (
+    <div>
+      Clue form
+    </div>
+  );
+}
+*/
+
 const FullGameView = (props: GameProps) => {
 
   const gameId: string = props.gameId;
@@ -512,7 +537,6 @@ const FullGameView = (props: GameProps) => {
   }
   const [connectionState] = useObject(ref(database, ".info/connected"));
   const [snapshot, loading, error] = useObject(gameRef);
-  const [spyMasterRound, setSpyMaster] = useState<string | null>(null);
 
   useEffect(
     () => {
@@ -544,14 +568,13 @@ const FullGameView = (props: GameProps) => {
   // At this point, it must be a valid gamestate.
   const roomState: RoomState = snapshotToRoomState(snapshot!);
   const teamsView = (<TeamsView userInfo={props.userInfo} players={roomState.players} spyMasters={roomState.spyMasters} />);
-  if (roomState.phase === "lobby") {
+
+  if (roomState.phase === "lobby" || !(roomState.players.get(props.userInfo.uid)?.team)) {
     return <LobbyView gameRef={gameRef} teamsLocked={roomState.teamsLocked} lockTeams={() => { lockTeams(gameRef); }} teamsView={teamsView} userInfo={props.userInfo} players={roomState.players} makeSpyMaster={makeSpyMaster} spyMasters={roomState.spyMasters} setTeam={(team) => { setTeam(gameId, props.userInfo, team); }} />
   } else if (!roomState.gameState!) {
     return <LoadingScreen/>;
   }
-  // const gameState: GameState = snapshotToGameState(snapshot!);
   const gameState: GameState = roomState.gameState!;
-  // return <LoadedGameView/>;
   const isConnected = connectionState && connectionState.val() === true ? true : false;
 
   const score = gameState ? computeWordsLeft(gameState!.grid) : null;
@@ -559,13 +582,8 @@ const FullGameView = (props: GameProps) => {
   // const isSpyMaster: boolean = spyMasterRound !== null && gameState != null && spyMasterRound === gameState!.round_id;
   const isSpyMaster: boolean = Array.from(roomState.spyMasters.values()).includes(props.userInfo.uid);
   const isMyTurn: boolean = gameState.current_turn === roomState.players.get(props.userInfo.uid)?.team;
-  const setSpyMasterHelper = (b: boolean) => {
-    if (b) {
-      setSpyMaster(gameState!.round_id);
-    } else {
-      setSpyMaster(null);
-    }
-  }
+  const enableButtons: boolean = isMyTurn && gameState.current_clue !== undefined;
+  const shouldGiveClue: boolean = isSpyMaster && isMyTurn && gameState.current_clue === undefined;
 
   const endTurn = () => {
     var nextTurn = "red";
@@ -582,6 +600,7 @@ const FullGameView = (props: GameProps) => {
         console.warn("Clicked a word that was already revealed");
         return;
       }
+      var batch: { [k: string]: any } = {};
       if (wordInfo.color === "black") {
         console.log("Black card revealed!");
         var winner = "red";
@@ -589,51 +608,44 @@ const FullGameView = (props: GameProps) => {
         if (gameState.current_turn === "red") {
           winner = "blue";
         }
-        set(
-          ref(database, `games/${gameId}/winner`),
-          winner
-        );
-        return;
-      }
-      if (wordInfo.color === "red" && score!.redWordsLeft === 1) {
-        set(
-          ref(database, `games/${gameId}/winner`),
-          "red"
-        );
-        return;
+        batch['gameState/winner'] = winner;
+      } else if (wordInfo.color === "red" && score!.redWordsLeft === 1) {
+        batch['gameState/winner'] = "red";
       }
       if (wordInfo.color === "blue" && score!.blueWordsLeft === 1) {
-        set(
-          ref(database, `games/${gameId}/winner`),
-          "blue"
-        );
-        return;
-      }
+        batch['gameState/winner'] = "blue";
+      } else {
+
       var nextTurn = gameState.current_turn;
       if (wordInfo.color !== gameState.current_turn) {
         nextTurn = (nextTurn === "red") ? "blue" : "red";
       }
-      var batch: { [k: string]: any } = {};
-      batch["current_turn"] = nextTurn;
-      batch[`grid/${key}/isRevealed`] = true;
-      // update(gameRef, batch);
+      batch["gameState/current_turn"] = nextTurn;
+      }
+      batch[`gameState/grid/${key}/isRevealed`] = true;
+      update(gameRef, batch);
     }
   }
 
+
   return (
     <div>
-      {<div><p>Hello {props.userInfo.displayName}</p> <Button onClick={props.logOut}>Logout</Button></div>}
       {error && <strong>Error: {error}</strong>}
       {loading && <span>List: Loading...</span> /* TODO: Add skeleton buttons while loading */}
       {
         !loading && snapshot && (
-          <GridView isSpyMaster={isSpyMaster} game={gameState!} onClick={onClick} />
+          <GridView disabled={!enableButtons} isSpyMaster={isSpyMaster} game={gameState!} onClick={onClick} />
         )
       }
       <Divider />
+      {
+
+/*
       <FormGroup>
         <FormControlLabel control={<SwitchButton checked={isSpyMaster} onChange={(e) => setSpyMasterHelper(e.target.checked)} />} label="Spymaster" />
       </FormGroup>
+      */
+      }
 
       <p>
         {gameState && gameState!.winner !== null && `The ${gameState!.winner} team won!`}
@@ -642,18 +654,25 @@ const FullGameView = (props: GameProps) => {
         {gameState && gameState!.winner === null && `It is the ${gameState!.current_turn} team's turn!`}
       </p >
       <p>
+        {gameState.current_clue && `The current clue is "${gameState.current_clue!.word}" for ${gameState.current_clue!.number}`}
+      </p>
+      <p>
         {score !== null && scoreString(score!)}
       </p>
-      {gameState && gameState!.winner === null && <BsButton onClick={endTurn}>End Turn</BsButton>}
+      {gameState && gameState!.winner === null && <BsButton disabled={!enableButtons} onClick={endTurn}>End Turn</BsButton>}
+      {
+        shouldGiveClue && <ClueForm onClue={(word: string, number: number) => {giveClue(gameRef, word, number);}} />
+      }
       <div>
-        <BsButton onClick={createGame}>
-          Start New Game
+        <BsButton onClick={() => {startNewRound(gameRef);}}>
+          Start New Round
         </BsButton>
       </div>
       {teamsView}
       <div>
         <p>Connection state: {JSON.stringify(connectionState)}</p>
       </div>
+      {<div> <Button onClick={props.logOut}>Logout</Button></div>}
     </div >
   );
 };
@@ -667,6 +686,12 @@ interface RoomState {
   spyMasters: Map<Team, string>;
   teamsLocked: boolean;
   gameState?: GameState // Defined if the phase is game.
+}
+
+interface Clue {
+  word: string,
+  number: number,
+  guesses: string[],
 }
 
 interface RawRoomState {
@@ -685,6 +710,8 @@ interface GameState {
   winner: Team | null;
   round_id: string;
   players: Map<string, PlayerInfo>;
+  current_clue?: Clue;
+  history: Clue[];
 }
 
 // This is the DB state for a word.
@@ -699,6 +726,7 @@ interface WordProps {
   onClick: () => any;
   isSpyMaster: boolean;
   gameOver: boolean;
+  disabled: boolean;
 }
 
 const colorToVariant = {
@@ -708,15 +736,18 @@ const colorToVariant = {
   "black": "dark",
 }
 
-// TODO: Switch to using an MUI button.
+// TODO: Switch to using an MUI button, and make this fill width.
 function WordView(props: WordProps) {
   var variant = "light";
-  if (props.isSpyMaster || props.wordInfo.isRevealed || props.gameOver) {
+  if (props.wordInfo.isRevealed) {
     variant = colorToVariant[props.wordInfo.color];
+  } else if (props.isSpyMaster || props.gameOver) {
+    // Use this to clarify which ones are revealed.
+    variant = `outline-${colorToVariant[props.wordInfo.color]}`;
   }
-  let isDisabled = props.wordInfo.isRevealed || props.gameOver;
-  return <div>
-    <BsButton variant={variant} disabled={isDisabled} onClick={props.onClick} >
+  let isDisabled = props.wordInfo.isRevealed || props.gameOver || props.disabled;
+  return <div className="d-grid gap-2">
+    <BsButton variant={variant} color={props.wordInfo.color} disabled={isDisabled} onClick={props.onClick} >
       {props.wordInfo.word}
     </BsButton>
   </div>;
@@ -725,6 +756,7 @@ function WordView(props: WordProps) {
 interface GridProps {
   isSpyMaster: boolean;
   game: GameState;
+  disabled: boolean;
   onClick: (s: string) => any;
 }
 
@@ -750,13 +782,12 @@ const GridView = (props: GridProps) => {
                   isSpyMaster: props.isSpyMaster,
                   gameOver: props.game.winner != null,
                   onClick: () => { props.onClick(key) },
+                  disabled: props.disabled,
                 }
                 return (
                   <Grid item key={gridKey} xs={8}>
-                    <div style={boxStyle}>
 
                       <WordView {...wordProps} />
-                    </div>
                   </Grid>
                 );
 

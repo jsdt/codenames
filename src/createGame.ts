@@ -1,4 +1,4 @@
-import { child, DatabaseReference, set } from "firebase/database";
+import { child, DatabaseReference, set, update } from "firebase/database";
 import { generateRandomIntInRange, generateShuffledPositionsArray } from './util';
 import { wordList } from './wordList';
 import { ToastBody } from 'react-bootstrap';
@@ -9,6 +9,9 @@ export function initializeGame(gameRef: DatabaseReference): Promise<void> {
     "round_id": `${Math.random()}`,
   }
   return set(gameRef, json_data);
+}
+export function giveClue(gameRef: DatabaseReference, word: string, number: number): Promise<void> {
+  return set(child(gameRef, "gameState/current_clue"), {word, number});
 }
 // Generate new board game and write initial state to RTDB
 export function writeStartGameData(gameRef: DatabaseReference): Promise<void> {
@@ -35,7 +38,12 @@ export function initializeGameState(gameRef: DatabaseReference): Promise<void> {
 }
 
 export function startNewRound(gameRef: DatabaseReference): Promise<void> {
-  return set(child(gameRef, "gameState"), generateGameData());
+  var batch: { [k: string]: any } = {};
+  batch["phase"] = "lobby";
+  batch["teamsLocked"] = null;
+  batch["gameState"] = null;
+  batch["spyMasters"] = null;
+  return update(gameRef, batch);
 }
 
 // Generate initial game state JSON
