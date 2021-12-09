@@ -1,14 +1,41 @@
-import { DatabaseReference, set } from "firebase/database";
+import { child, DatabaseReference, set } from "firebase/database";
 import { generateRandomIntInRange, generateShuffledPositionsArray } from './util';
 import { wordList } from './wordList';
 import { ToastBody } from 'react-bootstrap';
 
+export function initializeGame(gameRef: DatabaseReference): Promise<void> {
+  let json_data = {
+    "phase": "lobby",
+    "round_id": `${Math.random()}`,
+  }
+  return set(gameRef, json_data);
+}
 // Generate new board game and write initial state to RTDB
 export function writeStartGameData(gameRef: DatabaseReference): Promise<void> {
   const gameData: any = generateGameData();
 
   console.log("Initializing new game with id " + gameRef.key!);
   return set(gameRef, gameData);
+}
+
+export function initializeRoom(gameRef: DatabaseReference): Promise<void> {
+  let json_data = {
+    "phase": "lobby",
+    "round_id": `${Math.random()}`,
+  };
+  return set(gameRef, json_data);
+}
+
+export function startGame(gameRef: DatabaseReference): Promise<void> {
+  return set(child(gameRef, "phase"), "playing");
+};
+
+export function initializeGameState(gameRef: DatabaseReference): Promise<void> {
+  return set(child(gameRef, "gameState"), generateGameData());
+}
+
+export function startNewRound(gameRef: DatabaseReference): Promise<void> {
+  return set(child(gameRef, "gameState"), generateGameData());
 }
 
 // Generate initial game state JSON
@@ -18,19 +45,26 @@ function generateGameData() {
   const gameGrid = generateGameGrid(gameDictionary, firstTeam);
 
   let json_data = {
+    /*
     "game_options": {
       "time_per_round_seconds": 180,
       "dictionary": gameDictionary
     },
-    "grid": gameGrid,
-    "current_turn": firstTeam,
-    "winner": null,
+    */
+    // "gameState": {
+      "grid": gameGrid,
+      "current_turn": firstTeam,
+      "winner": null,
+
+    // },
+    /*
     "turn_end_timer": 0,
     "round_id": `${Math.random()}`,
     "clue": {
       "word": null,
       "number": null
     }
+    */
   };
 
   return json_data

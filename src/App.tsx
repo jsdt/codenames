@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import logo from './logo.svg';
 import './App.css';
-import { ref, getDatabase, DataSnapshot, set, update } from 'firebase/database';
+import { ref, get, getDatabase, DataSnapshot, set, update, runTransaction, DatabaseReference, query, orderByValue, startAfter, enableLogging, onValue, serverTimestamp, child } from 'firebase/database';
 import { useList, useObject, useObjectVal } from 'react-firebase-hooks/database';
 import { initializeApp } from 'firebase/app';
 import Container from 'react-bootstrap/Container';
@@ -12,16 +12,34 @@ import { useState } from 'react';
 import BsButton from 'react-bootstrap/Button';
 import LoadingButton from '@mui/lab/LoadingButton';
 import LoginIcon from '@mui/icons-material/Login';
-import { Button, Divider, FormControl, FormControlLabel, FormGroup, FormHelperText, Grid, Input, InputLabel, MenuItem, Select, Switch as SwitchButton, TextField } from '@mui/material';
+import { Button, Divider, FormControl, FormControlLabel, FormGroup, FormHelperText, Grid, Input, InputLabel, ListSubheader, MenuItem, Select, Switch as SwitchButton, TextField } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import Box from '@mui/material/Box';
 import Paper from '@mui/material/Paper';
-import { writeStartGameData } from './createGame';
+import { initializeGameState, initializeRoom, startGame, writeStartGameData } from './createGame';
 import { BrowserRouter, Route, useParams, Routes } from "react-router-dom";
 import { getAuth, updateProfile, signInAnonymously, signInWithCredential, signOut, onAuthStateChanged, updateCurrentUser } from "firebase/auth";
 import { useAuthState } from 'react-firebase-hooks/auth';
 
+import List from '@mui/material/List';
+import ListItem from '@mui/material/ListItem';
+import ListItemButton from '@mui/material/ListItemButton';
+import ListItemIcon from '@mui/material/ListItemIcon';
+import ListItemText from '@mui/material/ListItemText';
+import StarIcon from '@mui/icons-material/Star';
 
+
+/*
+const firebaseConfig = {
+  apiKey: "AIzaSyAyXLgcQ46iFKZW3jZdcV07w9EuBemi-yc",
+  authDomain: "testproj-jeffdt.firebaseapp.com",
+  databaseURL: "http://something1.fblocal.com:9000",
+  projectId: "testproj-jeffdt",
+  storageBucket: "testproj-jeffdt.appspot.com",
+  messagingSenderId: "781325435126",
+  appId: "1:781325435126:web:0f56aad3b2b3db8c0becd7"
+};
+*/
 const firebaseConfig = {
   apiKey: "AIzaSyAyXLgcQ46iFKZW3jZdcV07w9EuBemi-yc",
   authDomain: "testproj-jeffdt.firebaseapp.com",
@@ -40,6 +58,8 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
+        <Route path="/getTest" element={<GetTest />} />
+        <Route path="/timestampTest" element={<TimestampTest />} />
         <Route path="/:gameId" element={<GameView />} />
         <Route path="/" element={<GameView />} />
       </Routes>
@@ -49,16 +69,67 @@ function App() {
 
 const slots = [0, 1, 2, 3, 4];
 
+function snapshotToRoomState(snap: DataSnapshot): RoomState {
+  console.log(JSON.stringify(snap));
+  var players: Map<string, PlayerInfo> = new Map();
+  snap.child("players").forEach(child => {
+    players.set(child.key!, child.val() as PlayerInfo);
+  });
+  const round_id: string = snap.child("round_id").val();
+  const phase: Phase = snap.child("phase").val() as Phase;
+  var gameState = undefined
+  var spyMasters: Map<Team, string> = new Map();
+  snap.child("spyMasters").forEach(child => {
+    spyMasters.set(child.key! as Team, child.val());
+  });
+  var teamsLocked = false
+  if (snap.child("teamsLocked").val() === true) {
+    teamsLocked = true;
+  }
+  if (snap.child("gameState").val()) {
+    const gs = snap.child("gameState");
+    var grid: Map<string, WordInfo> = new Map();
+    gs.child("grid").forEach(child => {
+      grid.set(child.key!, child.val() as WordInfo);
+    });
+    gameState = {
+      grid: grid,
+      current_turn: gs.child("current_turn").val(),
+      winner: gs.child("winner").val(),
+      round_id: snap.child("round_id").val(),
+      players: players,
+    };
+
+  } else if (phase !== "lobby" && phase !== "playing") {
+    throw new Error(`invalid phase: ${phase}`);
+  }
+  return {
+    phase,
+    round_id,
+    players,
+    spyMasters,
+    gameState,
+    teamsLocked
+  };
+
+}
+
 function snapshotToGameState(snap: DataSnapshot): GameState {
-  var grid: Map<string, WordInfo> = new Map()
+  var grid: Map<string, WordInfo> = new Map();
   snap.child("grid").forEach(child => {
     grid.set(child.key!, child.val() as WordInfo);
   });
+  var players: Map<string, PlayerInfo> = new Map();
+  snap.child("players").forEach(child => {
+    players.set(child.key!, child.val() as PlayerInfo);
+  });
   return {
     grid: grid,
+    // phase: snap.child("phase").val(),
     current_turn: snap.child("current_turn").val(),
     winner: snap.child("winner").val(),
     round_id: snap.child("round_id").val(),
+    players: players,
   };
 
 }
@@ -98,6 +169,59 @@ interface UserInfo {
   uid: string
 }
 
+const TimestampTest = () => {
+  async function run() {
+    // firebase.database().useEmulator('localhost', 9000);
+    enableLogging(true);
+
+    const r = ref(database, 'timestampTest/');
+    onValue(r, (s) => { console.log(`timestamp: ${JSON.stringify(s)}`) });
+    const firstResult = await get(r);
+    console.log(firstResult);
+    await set(r, serverTimestamp());
+    console.log("Did the set");
+    const secondResult = await get(r);
+    console.log(secondResult);
+
+
+    // console.log('GET -> ', getSnapshot.val());
+    // console.log('ONCE- >', onceSnapshot.val());
+  }
+  return (
+    <div>
+      <Button onClick={run}>Try it</Button>
+    </div>
+  );
+}
+
+const GetTest = () => {
+  async function run() {
+    // firebase.database().useEmulator('localhost', 9000);
+    enableLogging(true);
+
+    const r = ref(database, 'getTest/');
+    await set(r, {
+      'a': 1,
+      'b': 2,
+      'c': 3,
+      'd': 4,
+    });
+
+    const q = query(r, orderByValue(), startAfter(2));
+    const result = await get(q);
+    onValue(q, (s) => { console.log(`Other: ${JSON.stringify(s)}`) });
+    console.log(JSON.stringify(result));
+
+
+    // console.log('GET -> ', getSnapshot.val());
+    // console.log('ONCE- >', onceSnapshot.val());
+  }
+  return (
+    <div>
+      <Button onClick={run}>Try it</Button>
+    </div>
+  );
+}
 const GameView = () => {
   const params = useParams();
   // const gameId: string = encodeURIComponent(params.gameId || "test");
@@ -106,6 +230,7 @@ const GameView = () => {
   const [user, loading, error] = useAuthState(auth);
   // useAuthState isn't updated when we update the profile (to set the display name), so we use the hook to force a rerender.
   const [didLogin, setProfileUpdated] = useState<boolean>(false);
+
   async function logIn(name: string, team: string): Promise<void> {
     const creds = await signInAnonymously(auth);
     console.log(creds);
@@ -219,22 +344,188 @@ const LoadingScreen = () => {
   );
 }
 
-const Lobby = () => {
-  //
+interface PlayerInfo {
+  isOnline: boolean,
+  displayName: string,
+  team?: Team
+  uid: string,
+}
+
+interface LobbyProps {
+  players: Map<string, PlayerInfo>,
+  spyMasters: Map<Team, string>;
+  setTeam: (team: "red" | "blue") => void,
+  makeSpyMaster: (team: Team, playerId: string) => void,
+  startGame?: () => Promise<void>,
+  teamsLocked: boolean;
+  lockTeams: () => void;
+  userInfo: UserInfo;
+  teamsView: JSX.Element;
+  gameRef: DatabaseReference;
+}
+
+interface TeamListProps {
+  players: Map<string, PlayerInfo>;
+  team: Team;
+  spyMaster?: string;
+  userInfo: UserInfo;
+}
+
+const TeamList = (p: TeamListProps) => {
+  function isMe(player: PlayerInfo): boolean {
+    return player.uid === p.userInfo.uid;
+  }
+  return (
+    <List subheader={
+      <ListSubheader>
+        {`${p.team} team`}
+      </ListSubheader>
+    }>
+      {
+        Array.from(p.players.entries()).filter(([_, playerInfo]) => { return playerInfo.team === p.team; }).map(([key, playerInfo]) => {
+          return (
+            <ListItem key={playerInfo.uid} >
+              {isMe(playerInfo) && (
+                <ListItemIcon>
+                  <StarIcon />
+                </ListItemIcon>
+              )}
+              <ListItemText inset={!isMe(playerInfo)} primary={playerInfo.displayName} />
+            </ListItem>);
+        })
+      }
+    </List>
+  );
+}
+
+interface TeamsViewProps {
+  players: Map<string, PlayerInfo>,
+  spyMasters: Map<Team, string>;
+  userInfo: UserInfo;
+}
+
+const TeamsView = (p: TeamsViewProps) => {
+  return (
+    <div>
+      <Grid container spacing={2} columns={40}>
+        <Grid item key="red" xs={18}>
+          <TeamList userInfo={p.userInfo} players={p.players} team="red" spyMaster={p.spyMasters.get("red")} />
+        </Grid>
+        <Grid item key="blue" xs={18}>
+          <TeamList userInfo={p.userInfo} players={p.players} team="blue" spyMaster={p.spyMasters.get("blue")} />
+        </Grid>
+
+      </Grid>
+    </div>
+  );
+}
+
+const LobbyView = (p: LobbyProps) => {
+  /**
+   * There should be two lists of players.
+   * The header should be the current spymaster.
+   * 
+   * Use a SelectedListItem to indicate the current spymaster.
+   */
+  console.log(p.spyMasters);
+  const myId = p.userInfo.uid;
+  var team: Team | undefined = undefined;
+  if (p.players.get(p.userInfo.uid)) {
+    team = p.players.get(p.userInfo.uid)?.team;
+  }
+  const canVolunteer = p.teamsLocked && team !== undefined && !p.spyMasters.get(team);
+  const canBegin = team && p.spyMasters.get("red") && p.spyMasters.get("blue");
+  const waitingForOtherTeam = team && p.spyMasters.get(team) && !canBegin;
+  // if (p.spyMasters.get("red") && p.spyMasters.get("blue"))
+  return (
+
+    <div>
+      {
+        (team !== undefined && p.teamsLocked) ||
+        <Select<string> labelId="initial-team-selector" onChange={(e) => { p.setTeam(e.target.value as Team); }} value={p.players.get(p.userInfo.uid)?.team}>
+          <MenuItem value="red"> Red </MenuItem>
+          <MenuItem value="blue"> Blue </MenuItem>
+        </Select>
+      }
+      {
+        canVolunteer && <div>
+          {`Your team needs a spymaster!`} <Button onClick={() => {makeSpyMaster(p.gameRef, myId, team!);}}>Volunteer</Button>
+
+        </div>
+      }
+      {
+        team && p.teamsLocked ||
+        <Button onClick={p.lockTeams}>
+          Choose Spymasters
+        </Button>
+      }
+      {
+        waitingForOtherTeam && <div> Waiting for the other team to choose a spymaster...</div>
+      }
+      {canBegin &&
+        <Button onClick={() => {startGame(p.gameRef);}}>
+          Start Playing
+        </Button>
+      }
+
+      {p.teamsView}
+    </div>
+
+  )
+}
+
+interface LoadedGameProps {
+  gameId: string;
+  userInfo: UserInfo;
+  logOut: () => void;
+  gameState: GameState;
+  isConnected: boolean;
+}
+
+const LoadedGameView = (props: LoadedGameProps) => {
+  return (
+    <div></div>
+
+  );
+}
+
+function setTeam(gameId: string, user: UserInfo, team: "red" | "blue") {
+
+  set(ref(database, `games/${gameId}/players/${user.uid}/`), { uid: user.uid, displayName: user.displayName, team: team });
+}
+
+function lockTeams(gameRef: DatabaseReference): void {
+  set(child(gameRef, "teamsLocked"), true);
+}
+
+function makeSpyMaster(gameRef: DatabaseReference, playerId: string, team: Team) {
+  set(child(gameRef, `spyMasters/${team}`), playerId);
+
 }
 
 const FullGameView = (props: GameProps) => {
+
   const gameId: string = props.gameId;
-  const gameRef = ref(database, `games / ${gameId}`);
+  const gameRef = ref(database, `games/${gameId}`);
   function createGame(): Promise<void> {
     return writeStartGameData(gameRef);
   }
+  const [connectionState] = useObject(ref(database, ".info/connected"));
   const [snapshot, loading, error] = useObject(gameRef);
   const [spyMasterRound, setSpyMaster] = useState<string | null>(null);
+
   useEffect(
     () => {
-      if (!loading && !error && snapshot!.val() === null) {
-        createGame();
+      if (loading || error) {
+        return;
+      }
+      if (snapshot!.val() === null) {
+        // createGame();
+        initializeRoom(gameRef);
+      } else if (snapshot!.child("phase").val() === "playing" && snapshot!.child("gameState").val() === null) {
+      // If phase is playing and the gameState is missing, create the game state (grid).
+        // create the game
+        initializeGameState(gameRef);
       }
     },
     [snapshot]
@@ -244,11 +535,30 @@ const FullGameView = (props: GameProps) => {
   } else if (loading || snapshot!.val() === null) {
     return <LoadingScreen />;
   }
-  const gameState: GameState | null = snapshot ? snapshotToGameState(snapshot) : null;
+  // If snapshot is in lobby state, go to lobby view.
+
+  function makeSpyMaster(t: Team, uid: string): void {
+    set(ref(database, `games/${gameId}/spyMasters/${t}`), uid);
+  }
+
+  // At this point, it must be a valid gamestate.
+  const roomState: RoomState = snapshotToRoomState(snapshot!);
+  const teamsView = (<TeamsView userInfo={props.userInfo} players={roomState.players} spyMasters={roomState.spyMasters} />);
+  if (roomState.phase === "lobby") {
+    return <LobbyView gameRef={gameRef} teamsLocked={roomState.teamsLocked} lockTeams={() => { lockTeams(gameRef); }} teamsView={teamsView} userInfo={props.userInfo} players={roomState.players} makeSpyMaster={makeSpyMaster} spyMasters={roomState.spyMasters} setTeam={(team) => { setTeam(gameId, props.userInfo, team); }} />
+  } else if (!roomState.gameState!) {
+    return <LoadingScreen/>;
+  }
+  // const gameState: GameState = snapshotToGameState(snapshot!);
+  const gameState: GameState = roomState.gameState!;
+  // return <LoadedGameView/>;
+  const isConnected = connectionState && connectionState.val() === true ? true : false;
 
   const score = gameState ? computeWordsLeft(gameState!.grid) : null;
   // We set the spymaster for the current round, so it is reset if someone starts a new game.
-  const isSpyMaster: boolean = spyMasterRound !== null && gameState != null && spyMasterRound === gameState!.round_id;
+  // const isSpyMaster: boolean = spyMasterRound !== null && gameState != null && spyMasterRound === gameState!.round_id;
+  const isSpyMaster: boolean = Array.from(roomState.spyMasters.values()).includes(props.userInfo.uid);
+  const isMyTurn: boolean = gameState.current_turn === roomState.players.get(props.userInfo.uid)?.team;
   const setSpyMasterHelper = (b: boolean) => {
     if (b) {
       setSpyMaster(gameState!.round_id);
@@ -262,7 +572,7 @@ const FullGameView = (props: GameProps) => {
     if (gameState!.current_turn === "red") {
       nextTurn = "blue";
     }
-    set(ref(database, `games / ${gameId} / current_turn`), nextTurn);
+    set(ref(database, `games/${gameId}/current_turn`), nextTurn);
   }
 
   const onClick = (key: string) => {
@@ -280,21 +590,21 @@ const FullGameView = (props: GameProps) => {
           winner = "blue";
         }
         set(
-          ref(database, `games / ${gameId} / winner`),
+          ref(database, `games/${gameId}/winner`),
           winner
         );
         return;
       }
       if (wordInfo.color === "red" && score!.redWordsLeft === 1) {
         set(
-          ref(database, `games / ${gameId} / winner`),
+          ref(database, `games/${gameId}/winner`),
           "red"
         );
         return;
       }
       if (wordInfo.color === "blue" && score!.blueWordsLeft === 1) {
         set(
-          ref(database, `games / ${gameId} / winner`),
+          ref(database, `games/${gameId}/winner`),
           "blue"
         );
         return;
@@ -305,8 +615,8 @@ const FullGameView = (props: GameProps) => {
       }
       var batch: { [k: string]: any } = {};
       batch["current_turn"] = nextTurn;
-      batch[`grid / ${key} / isRevealed`] = true;
-      update(gameRef, batch);
+      batch[`grid/${key}/isRevealed`] = true;
+      // update(gameRef, batch);
     }
   }
 
@@ -340,16 +650,41 @@ const FullGameView = (props: GameProps) => {
           Start New Game
         </BsButton>
       </div>
+      {teamsView}
+      <div>
+        <p>Connection state: {JSON.stringify(connectionState)}</p>
+      </div>
     </div >
   );
 };
 
+type Team = "red" | "blue";
+type Phase = "lobby" | "playing";
+interface RoomState {
+  phase: Phase;
+  round_id: string;
+  players: Map<string, PlayerInfo>;
+  spyMasters: Map<Team, string>;
+  teamsLocked: boolean;
+  gameState?: GameState // Defined if the phase is game.
+}
+
+interface RawRoomState {
+  phase: "lobby" | "playing";
+  round_id: string
+  grid?: Map<string, WordInfo>;
+  current_turn?: Team;
+  winner?: Team;
+  teamsLocked?: boolean;
+  players?: Map<string, PlayerInfo>
+}
+
 interface GameState {
   grid: Map<string, WordInfo>
-  current_turn: "red" | "blue";
-  winner: "red" | "blue" | null;
+  current_turn: Team;
+  winner: Team | null;
   round_id: string;
-
+  players: Map<string, PlayerInfo>;
 }
 
 // This is the DB state for a word.
@@ -410,11 +745,17 @@ const GridView = (props: GridProps) => {
 
               Array.from(props.game.grid).map(([key, wordInfo]) => {
                 const gridKey = `${props.game.round_id}/${key}`;
+                const wordProps = {
+                  wordInfo,
+                  isSpyMaster: props.isSpyMaster,
+                  gameOver: props.game.winner != null,
+                  onClick: () => { props.onClick(key) },
+                }
                 return (
                   <Grid item key={gridKey} xs={8}>
                     <div style={boxStyle}>
 
-                      <WordView wordInfo={wordInfo} isSpyMaster={props.isSpyMaster} gameOver={props.game.winner != null} onClick={() => { props.onClick(key) }} />
+                      <WordView {...wordProps} />
                     </div>
                   </Grid>
                 );

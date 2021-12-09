@@ -1,0 +1,16 @@
+{
+    "round_id": "whatever2",
+    "phase": "lobby",
+    "players": {
+        "uid1": {
+            "displayName": "Ffej1",
+            "team": "red",
+            "uid": "uid1"
+        },
+        "uid2": {
+            "displayName": "Ffej2",
+            "team": "blue",
+            "uid": "uid2"
+        }
+    }
+}
