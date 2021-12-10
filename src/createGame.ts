@@ -10,8 +10,8 @@ export function initializeGame(gameRef: DatabaseReference): Promise<void> {
   }
   return set(gameRef, json_data);
 }
-export function giveClue(gameRef: DatabaseReference, word: string, number: number): Promise<void> {
-  return set(child(gameRef, "gameState/current_clue"), {word, number});
+export function giveClue(gameRef: DatabaseReference, word: string, number: number, team: "red" | "blue"): Promise<void> {
+  return set(child(gameRef, "gameState/current_clue"), { word, number, team });
 }
 // Generate new board game and write initial state to RTDB
 export function writeStartGameData(gameRef: DatabaseReference): Promise<void> {
@@ -60,9 +60,9 @@ function generateGameData() {
     },
     */
     // "gameState": {
-      "grid": gameGrid,
-      "current_turn": firstTeam,
-      "winner": null,
+    "grid": gameGrid,
+    "current_turn": firstTeam,
+    "winner": null,
 
     // },
     /*

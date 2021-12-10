@@ -1,7 +1,17 @@
 import React, { useEffect } from 'react';
 import logo from './logo.svg';
 import './App.css';
+import { TransitionGroup } from 'react-transition-group';
+
 import { ref, get, getDatabase, DataSnapshot, set, update, runTransaction, DatabaseReference, query, orderByValue, startAfter, enableLogging, onValue, serverTimestamp, child } from 'firebase/database';
+import { FixedSizeList, ListChildComponentProps } from 'react-window';
+import Timeline from '@mui/lab/Timeline';
+import TimelineItem from '@mui/lab/TimelineItem';
+import TimelineSeparator from '@mui/lab/TimelineSeparator';
+import TimelineConnector from '@mui/lab/TimelineConnector';
+import TimelineContent from '@mui/lab/TimelineContent';
+import TimelineDot from '@mui/lab/TimelineDot';
+import TimelineOppositeContent from '@mui/lab/TimelineOppositeContent';
 import { useList, useObject, useObjectVal } from 'react-firebase-hooks/database';
 import { initializeApp } from 'firebase/app';
 import Container from 'react-bootstrap/Container';
@@ -12,7 +22,7 @@ import { useState } from 'react';
 import BsButton from 'react-bootstrap/Button';
 import LoadingButton from '@mui/lab/LoadingButton';
 import LoginIcon from '@mui/icons-material/Login';
-import { Button, Divider, FormControl, FormControlLabel, FormGroup, FormHelperText, Grid, Input, InputLabel, ListSubheader, MenuItem, Select, Switch as SwitchButton, TextField } from '@mui/material';
+import { Button, Collapse, Divider, FormControl, FormControlLabel, FormGroup, FormHelperText, Grid, Input, InputLabel, ListSubheader, MenuItem, Select, Switch as SwitchButton, TextField } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import Box from '@mui/material/Box';
 import Paper from '@mui/material/Paper';
@@ -93,8 +103,26 @@ function snapshotToRoomState(snap: DataSnapshot): RoomState {
       grid.set(child.key!, child.val() as WordInfo);
     });
     var current_clue: Clue | undefined = undefined;
+    /*
+    if (gs.hasChild("current_clue")) {
+      var guesses: string[] = [];
+      gs.child("current_clue/guesses").forEach(child => {
+        guesses.push()
+      })
+      current_clue = {
+        word: gs.child("current_clue/word").val() as string,
+        number: gs.child("current_clue/number").val() as number,
+        guesses
+      }
+      current_clue = gs.child("current_clue").val() as Clue;
+      gs.child("current_clue")
+    }
+    */
     if (gs.hasChild("current_clue")) {
       current_clue = gs.child("current_clue").val() as Clue;
+      if (!current_clue.guesses) {
+        current_clue.guesses = [];
+      }
     }
     gameState = {
       grid: grid,
@@ -103,7 +131,7 @@ function snapshotToRoomState(snap: DataSnapshot): RoomState {
       round_id: snap.child("round_id").val(),
       current_clue,
       players: players,
-      history: [],
+      history: (gs.child("history").val() as Clue[]) || [],
     };
 
   } else if (phase !== "lobby" && phase !== "playing") {
@@ -362,25 +390,30 @@ const TeamList = (p: TeamListProps) => {
   function isMe(player: PlayerInfo): boolean {
     return player.uid === p.userInfo.uid;
   }
+  const filteredPlayers = Array.from(p.players.entries()).filter(([_, playerInfo]) => { return playerInfo.team === p.team; });
   return (
-    <List subheader={
+
+    <List style={{ maxHeight: '100%', overflow: 'auto' }} subheader={
       <ListSubheader>
         {`${p.team} team`}
       </ListSubheader>
     }>
-      {
-        Array.from(p.players.entries()).filter(([_, playerInfo]) => { return playerInfo.team === p.team; }).map(([key, playerInfo]) => {
-          return (
-            <ListItem key={playerInfo.uid} >
-              {isMe(playerInfo) && (
-                <ListItemIcon>
-                  <StarIcon />
-                </ListItemIcon>
-              )}
-              <ListItemText inset={!isMe(playerInfo)} primary={playerInfo.displayName} />
-            </ListItem>);
-        })
-      }
+      <TransitionGroup>
+
+        {
+          filteredPlayers.map(([key, playerInfo]) => {
+            const typographyProps = isMe(playerInfo) ? {fontWeight: 'bold'} : {};
+            const suffix = p.spyMaster === playerInfo.uid ? " (spymaster)" : "";
+            return (
+              <Collapse key={playerInfo.uid} >
+
+                <ListItem key={playerInfo.uid} >
+                  {/* if isMe(playerInfo), make it bold */}
+                  <ListItemText primaryTypographyProps={typographyProps} primary={playerInfo.displayName + suffix} />
+                </ListItem> </Collapse>);
+          })
+        }
+      </TransitionGroup>
     </List>
   );
 }
@@ -393,17 +426,14 @@ interface TeamsViewProps {
 
 const TeamsView = (p: TeamsViewProps) => {
   return (
-    <div>
-      <Grid container spacing={2} columns={40}>
-        <Grid item key="red" xs={18}>
-          <TeamList userInfo={p.userInfo} players={p.players} team="red" spyMaster={p.spyMasters.get("red")} />
-        </Grid>
-        <Grid item key="blue" xs={18}>
-          <TeamList userInfo={p.userInfo} players={p.players} team="blue" spyMaster={p.spyMasters.get("blue")} />
-        </Grid>
-
-      </Grid>
-    </div>
+      <Box sx={{maxHeight: '25vh', display: "flex", flexDirection: 'row'}}>
+          <Box border={2} borderColor={"error.main"} flexGrow={1}>
+            <TeamList userInfo={p.userInfo} players={p.players} team="red" spyMaster={p.spyMasters.get("red")} />
+          </Box>
+          <Box border={2} borderColor={"primary.main"} flexGrow={1}>
+            <TeamList userInfo={p.userInfo} players={p.players} team="blue" spyMaster={p.spyMasters.get("blue")} />
+          </Box>
+      </Box>
   );
 }
 
@@ -437,7 +467,7 @@ const LobbyView = (p: LobbyProps) => {
       }
       {
         canVolunteer && <div>
-          {`Your team needs a spymaster!`} <Button onClick={() => {makeSpyMaster(p.gameRef, myId, team!);}}>Volunteer</Button>
+          {`Your team needs a spymaster!`} <Button onClick={() => { makeSpyMaster(p.gameRef, myId, team!); }}>Volunteer</Button>
 
         </div>
       }
@@ -452,7 +482,7 @@ const LobbyView = (p: LobbyProps) => {
         waitingForOtherTeam && <div> Waiting for the other team to choose a spymaster...</div>
       }
       {canBegin &&
-        <Button onClick={() => {startGame(p.gameRef);}}>
+        <Button onClick={() => { startGame(p.gameRef); }}>
           Start Playing
         </Button>
       }
@@ -504,7 +534,7 @@ const ClueForm = (props: ClueProps) => {
           <FormHelperText>Enter the clue word.</FormHelperText>
         </FormControl>
         <FormControl sx={{ m: 1, minWidth: 120 }}>
-          <TextField inputProps={{inputMode: 'numeric', pattern: '[0-9]*'}} required placeholder="Number" type="text" label="Number" value={number} onChange={(e) => { setNumber(e.target.value); }} />
+          <TextField inputProps={{ inputMode: 'numeric', pattern: '[0-9]*' }} required placeholder="Number" type="text" label="Number" value={number} onChange={(e) => { setNumber(e.target.value); }} />
           <FormHelperText>How many words should they guess?</FormHelperText>
         </FormControl>
         <Button onClick={onSubmit}>
@@ -517,16 +547,54 @@ const ClueForm = (props: ClueProps) => {
   );
 
 }
-/*
-function ClueForm(p: ClueProps) {
 
-  return (
-    <div>
-      Clue form
-    </div>
-  );
+interface HistoryProps {
+  history: Clue[]
+  current_clue?: Clue
 }
-*/
+const HistoryTimeline = (props: HistoryProps) => {
+  // TODO: Add a header/key?
+  const reversedClues = [...props.history];
+  reversedClues.reverse();
+  function keyFromIndex(index: number): number {
+    return reversedClues.length - index ;
+  }
+  return (
+    <React.Fragment>
+      <Timeline position="left">
+        <TimelineItem>
+
+        <TimelineSeparator>
+
+        <TimelineConnector/>
+        </TimelineSeparator>
+        <TimelineContent></TimelineContent>
+        </TimelineItem>
+        {
+          reversedClues.map((clue, i) => {
+            return (
+              <TimelineItem key={keyFromIndex(i)}>
+                <TimelineOppositeContent>
+                  {clue.guesses && clue.guesses.join(', ')}
+                </TimelineOppositeContent>
+                <TimelineSeparator >
+                  <TimelineDot color={teamToMUIVariant[clue.team] as ("primary" | "error")} />
+                  {
+                    i < reversedClues.length - 1 && <TimelineConnector />
+                  }
+
+                </TimelineSeparator>
+
+                <TimelineContent>{`${clue.word} (${clue.number})`}</TimelineContent>
+              </TimelineItem>
+            );
+          })
+        }
+      </Timeline>
+    </React.Fragment>
+  );
+
+}
 
 const FullGameView = (props: GameProps) => {
 
@@ -547,7 +615,7 @@ const FullGameView = (props: GameProps) => {
         // createGame();
         initializeRoom(gameRef);
       } else if (snapshot!.child("phase").val() === "playing" && snapshot!.child("gameState").val() === null) {
-      // If phase is playing and the gameState is missing, create the game state (grid).
+        // If phase is playing and the gameState is missing, create the game state (grid).
         // create the game
         initializeGameState(gameRef);
       }
@@ -572,7 +640,7 @@ const FullGameView = (props: GameProps) => {
   if (roomState.phase === "lobby" || !(roomState.players.get(props.userInfo.uid)?.team)) {
     return <LobbyView gameRef={gameRef} teamsLocked={roomState.teamsLocked} lockTeams={() => { lockTeams(gameRef); }} teamsView={teamsView} userInfo={props.userInfo} players={roomState.players} makeSpyMaster={makeSpyMaster} spyMasters={roomState.spyMasters} setTeam={(team) => { setTeam(gameId, props.userInfo, team); }} />
   } else if (!roomState.gameState!) {
-    return <LoadingScreen/>;
+    return <LoadingScreen />;
   }
   const gameState: GameState = roomState.gameState!;
   const isConnected = connectionState && connectionState.val() === true ? true : false;
@@ -583,14 +651,19 @@ const FullGameView = (props: GameProps) => {
   const isSpyMaster: boolean = Array.from(roomState.spyMasters.values()).includes(props.userInfo.uid);
   const isMyTurn: boolean = gameState.current_turn === roomState.players.get(props.userInfo.uid)?.team;
   const enableButtons: boolean = isMyTurn && gameState.current_clue !== undefined;
-  const shouldGiveClue: boolean = isSpyMaster && isMyTurn && gameState.current_clue === undefined;
+  const shouldGiveClue: boolean = isSpyMaster && isMyTurn && gameState.current_clue === undefined && !gameState.winner;
 
   const endTurn = () => {
+    var batch: { [k: string]: any } = {};
     var nextTurn = "red";
     if (gameState!.current_turn === "red") {
       nextTurn = "blue";
     }
-    set(ref(database, `games/${gameId}/current_turn`), nextTurn);
+    batch["current_turn"] = nextTurn;
+    batch[`history/${gameState.history.length}`] = gameState.current_clue!;
+    batch["current_clue"] = null;
+    update(child(gameRef, "gameState"), batch);
+    // set(ref(database, `games/${gameId}/current_turn`), nextTurn);
   }
 
   const onClick = (key: string) => {
@@ -600,6 +673,8 @@ const FullGameView = (props: GameProps) => {
         console.warn("Clicked a word that was already revealed");
         return;
       }
+      const newGuesses = [...gameState.current_clue!.guesses];
+      newGuesses.push(wordInfo.word);
       var batch: { [k: string]: any } = {};
       if (wordInfo.color === "black") {
         console.log("Black card revealed!");
@@ -616,22 +691,48 @@ const FullGameView = (props: GameProps) => {
         batch['gameState/winner'] = "blue";
       } else {
 
-      var nextTurn = gameState.current_turn;
-      if (wordInfo.color !== gameState.current_turn) {
-        nextTurn = (nextTurn === "red") ? "blue" : "red";
-      }
-      batch["gameState/current_turn"] = nextTurn;
+        var nextTurn = gameState.current_turn;
+        if (wordInfo.color !== gameState.current_turn || gameState.current_clue!.number < newGuesses.length) {
+          nextTurn = (nextTurn === "red") ? "blue" : "red";
+          batch[`gameState/history/${gameState.history.length}`] = { team: gameState.current_turn, word: gameState.current_clue!.word, number: gameState.current_clue!.number, guesses: newGuesses };
+          batch[`gameState/current_clue`] = null;
+        } else {
+          batch["gameState/current_clue/guesses"] = newGuesses;
+        }
+        batch["gameState/current_turn"] = nextTurn;
       }
       batch[`gameState/grid/${key}/isRevealed`] = true;
       update(gameRef, batch);
     }
   }
 
+  function currentClueThing(): string {
+    if (gameState.current_clue) {
+      return `The current clue is "${gameState.current_clue!.word}" for ${gameState.current_clue!.number}. Up to ${gameState.current_clue!.number + 1 - gameState.current_clue!.guesses.length} guesses left.`;
+    } else {
+      const waitingFor = shouldGiveClue ? "you" : "other spymaster";
+      return `Waiting for ${waitingFor} to give a clue...`;
+    }
+  }
 
   return (
     <div>
       {error && <strong>Error: {error}</strong>}
       {loading && <span>List: Loading...</span> /* TODO: Add skeleton buttons while loading */}
+          <Box sx={{display: 'flex', flexDirection: 'row', justifyContent: 'space-evenly', width: '100%'}}>
+            <Box sx={{width: '30%'}} border={1}>
+              {currentClueThing()}
+            </Box>
+          <Box  sx={{width: '30%', textAlign: 'center'}} border={1}>
+            {gameState && gameState!.winner !== null && `The ${gameState!.winner} team won!` || `It is the ${gameState!.current_turn} team's turn!`}
+          </Box>
+          <Box  sx={{width: '30%', textAlign: 'right'}} border={1}>
+            {score !== null && scoreString(score!)}
+            </Box>
+            </Box>
+            {
+            }
+      <Divider />
       {
         !loading && snapshot && (
           <GridView disabled={!enableButtons} isSpyMaster={isSpyMaster} game={gameState!} onClick={onClick} />
@@ -640,35 +741,28 @@ const FullGameView = (props: GameProps) => {
       <Divider />
       {
 
-/*
-      <FormGroup>
-        <FormControlLabel control={<SwitchButton checked={isSpyMaster} onChange={(e) => setSpyMasterHelper(e.target.checked)} />} label="Spymaster" />
-      </FormGroup>
-      */
+        /*
+              <FormGroup>
+                <FormControlLabel control={<SwitchButton checked={isSpyMaster} onChange={(e) => setSpyMasterHelper(e.target.checked)} />} label="Spymaster" />
+              </FormGroup>
+              */
       }
-
-      <p>
-        {gameState && gameState!.winner !== null && `The ${gameState!.winner} team won!`}
-      </p>
-      <p>
-        {gameState && gameState!.winner === null && `It is the ${gameState!.current_turn} team's turn!`}
-      </p >
-      <p>
-        {gameState.current_clue && `The current clue is "${gameState.current_clue!.word}" for ${gameState.current_clue!.number}`}
-      </p>
-      <p>
-        {score !== null && scoreString(score!)}
-      </p>
       {gameState && gameState!.winner === null && <BsButton disabled={!enableButtons} onClick={endTurn}>End Turn</BsButton>}
       {
-        shouldGiveClue && <ClueForm onClue={(word: string, number: number) => {giveClue(gameRef, word, number);}} />
+        shouldGiveClue && <ClueForm onClue={(word: string, number: number) => { giveClue(gameRef, word, number, gameState.current_turn); }} />
       }
+      <HistoryTimeline history={gameState.history} />
       <div>
-        <BsButton onClick={() => {startNewRound(gameRef);}}>
+        <BsButton onClick={() => { startNewRound(gameRef); }}>
           Start New Round
         </BsButton>
       </div>
+      <div>
+        <Box sx={{height: '10%'}}>
+
       {teamsView}
+      </Box>
+      </div>
       <div>
         <p>Connection state: {JSON.stringify(connectionState)}</p>
       </div>
@@ -691,6 +785,7 @@ interface RoomState {
 interface Clue {
   word: string,
   number: number,
+  team: Team,
   guesses: string[],
 }
 
@@ -729,6 +824,10 @@ interface WordProps {
   disabled: boolean;
 }
 
+const teamToMUIVariant = {
+  "blue": "primary",
+  "red": "error"
+}
 const colorToVariant = {
   "blue": "primary",
   "red": "danger",
@@ -770,32 +869,35 @@ const GridView = (props: GridProps) => {
 
   return (
     <div>
-      {
-        (
-          <Grid container spacing={2} columns={40}>
-            {
+      <Box sx={{ m: 5 }}>
 
-              Array.from(props.game.grid).map(([key, wordInfo]) => {
-                const gridKey = `${props.game.round_id}/${key}`;
-                const wordProps = {
-                  wordInfo,
-                  isSpyMaster: props.isSpyMaster,
-                  gameOver: props.game.winner != null,
-                  onClick: () => { props.onClick(key) },
-                  disabled: props.disabled,
-                }
-                return (
-                  <Grid item key={gridKey} xs={8}>
+        {
+          (
+            <Grid container spacing={2} columns={40}>
+              {
+
+                Array.from(props.game.grid).map(([key, wordInfo]) => {
+                  const gridKey = `${props.game.round_id}/${key}`;
+                  const wordProps = {
+                    wordInfo,
+                    isSpyMaster: props.isSpyMaster,
+                    gameOver: props.game.winner != null,
+                    onClick: () => { props.onClick(key) },
+                    disabled: props.disabled,
+                  }
+                  return (
+                    <Grid item key={gridKey} xs={8}>
 
                       <WordView {...wordProps} />
-                  </Grid>
-                );
+                    </Grid>
+                  );
 
-              })
-            }
-          </Grid>
-        )
-      }
+                })
+              }
+            </Grid>
+          )
+        }
+      </Box>
 
 
     </div>
