@@ -83,7 +83,7 @@ function App() {
 const slots = [0, 1, 2, 3, 4];
 
 function snapshotToRoomState(snap: DataSnapshot): RoomState {
-  console.log(JSON.stringify(snap));
+  // console.log(JSON.stringify(snap));
   var players: Map<string, PlayerInfo> = new Map();
   snap.child("players").forEach(child => {
     if (!child.hasChild('displayName')) {
@@ -476,13 +476,11 @@ const LobbyView = (p: LobbyProps) => {
    * 
    * Use a SelectedListItem to indicate the current spymaster.
    */
-  console.log(p.spyMasters);
   const myId = p.userInfo.uid;
   var team: Team | undefined = undefined;
   if (p.players.get(p.userInfo.uid)) {
     team = p.players.get(p.userInfo.uid)?.team;
   }
-  console.log(team);
   const canVolunteer = p.teamsLocked && team !== undefined && !p.spyMasters.get(team);
   const canBegin = team && p.spyMasters.get("red") && p.spyMasters.get("blue");
   const waitingForOtherTeam = team && p.spyMasters.get(team) && !canBegin;
@@ -550,7 +548,7 @@ interface LoadedGameProps {
 
 function setTeam(gameId: string, user: UserInfo, team: "red" | "blue") {
 
-  set(ref(database, `games/${gameId}/players/${user.uid}/`), { uid: user.uid, displayName: user.displayName, team: team });
+  update(ref(database, `games/${gameId}/players/${user.uid}/`), { uid: user.uid, displayName: user.displayName, team: team });
 }
 
 function lockTeams(gameRef: DatabaseReference): void {
