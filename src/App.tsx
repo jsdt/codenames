@@ -3,7 +3,7 @@ import logo from './logo.svg';
 import './App.css';
 import { TransitionGroup } from 'react-transition-group';
 
-import { ref, get, getDatabase, DataSnapshot, set, update, runTransaction, DatabaseReference, query, orderByValue, startAfter, enableLogging, onValue, serverTimestamp, child } from 'firebase/database';
+import { ref, get, getDatabase, DataSnapshot, set, update, runTransaction, DatabaseReference, query, orderByValue, startAfter, enableLogging, onValue, serverTimestamp, child, onDisconnect, push } from 'firebase/database';
 import { FixedSizeList, ListChildComponentProps } from 'react-window';
 import Timeline from '@mui/lab/Timeline';
 import TimelineItem from '@mui/lab/TimelineItem';
@@ -22,7 +22,7 @@ import { useState } from 'react';
 import BsButton from 'react-bootstrap/Button';
 import LoadingButton from '@mui/lab/LoadingButton';
 import LoginIcon from '@mui/icons-material/Login';
-import { Button, Collapse, Divider, FormControl, FormControlLabel, FormGroup, FormHelperText, Grid, Input, InputLabel, ListSubheader, MenuItem, Select, Switch as SwitchButton, TextField } from '@mui/material';
+import { Button, Collapse, Divider, FormControl, FormControlLabel, FormGroup, FormHelperText, Grid, Input, InputLabel, ListSubheader, MenuItem, Select, Switch as SwitchButton, TextField, Tooltip } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import Box from '@mui/material/Box';
 import Paper from '@mui/material/Paper';
@@ -35,6 +35,9 @@ import List from '@mui/material/List';
 import ListItem from '@mui/material/ListItem';
 import ListItemButton from '@mui/material/ListItemButton';
 import ListItemIcon from '@mui/material/ListItemIcon';
+import OnlinePredictionIcon from '@mui/icons-material/OnlinePrediction';
+import WifiOffIcon from '@mui/icons-material/WifiOff';
+import WifiIcon from '@mui/icons-material/Wifi';
 import ListItemText from '@mui/material/ListItemText';
 import StarIcon from '@mui/icons-material/Star';
 
@@ -83,7 +86,17 @@ function snapshotToRoomState(snap: DataSnapshot): RoomState {
   console.log(JSON.stringify(snap));
   var players: Map<string, PlayerInfo> = new Map();
   snap.child("players").forEach(child => {
-    players.set(child.key!, child.val() as PlayerInfo);
+    if (!child.hasChild('displayName')) {
+      return;
+    }
+    const isOnline = child.child('connections').hasChildren();
+    const lastActivity = child.child("status/lastActivity").val() as number;
+
+    // TODO: Ignore it if the child has been offline for longer than some threshold.
+
+    const p = child.val() as PlayerInfo;
+    p.isOnline = isOnline;
+    players.set(child.key!, p);
   });
   const round_id: string = snap.child("round_id").val();
   const phase: Phase = snap.child("phase").val() as Phase;
@@ -344,6 +357,18 @@ interface GameProps {
   logOut: () => void
 }
 
+async function handleLoginStuff(playerRef: DatabaseReference): Promise<void> {
+  const connectionsRef = child(playerRef, `connections`);
+  const lastActivityRef = child(playerRef, `lastActivity`);
+  const newConnRef = push(connectionsRef);
+  await onDisconnect(newConnRef).remove();
+  await onDisconnect(lastActivityRef).set(serverTimestamp());
+  // This should be batched with the new conn thing.
+  await set(lastActivityRef, serverTimestamp());
+  await set(newConnRef, true);
+  return;
+}
+
 const ErrorScreen = () => {
   return (
     <div>
@@ -403,13 +428,20 @@ const TeamList = (p: TeamListProps) => {
         {
           filteredPlayers.map(([key, playerInfo]) => {
             const typographyProps = isMe(playerInfo) ? {fontWeight: 'bold'} : {};
+            const tooltip = playerInfo.isOnline ? "Online" : "Offline";
             const suffix = p.spyMaster === playerInfo.uid ? " (spymaster)" : "";
             return (
               <Collapse key={playerInfo.uid} >
 
                 <ListItem key={playerInfo.uid} >
                   {/* if isMe(playerInfo), make it bold */}
-                  <ListItemText primaryTypographyProps={typographyProps} primary={playerInfo.displayName + suffix} />
+                  <ListItemIcon>
+                    <Tooltip title={tooltip} >
+                    {playerInfo.isOnline ? <WifiIcon/> : <WifiOffIcon/>}
+                      </Tooltip>
+                  </ListItemIcon>
+
+                  <ListItemText primaryTypographyProps={typographyProps} primary={ playerInfo.displayName + suffix} />
                 </ListItem> </Collapse>);
           })
         }
@@ -611,6 +643,16 @@ const HistoryTimeline = (props: HistoryProps) => {
 
 }
 
+const isOfflineForDatabase = {
+    isOnline: false,
+    last_changed: serverTimestamp(),
+};
+
+const isOnlineForDatabase = {
+    isOnline: true,
+    last_changed: serverTimestamp(),
+};
+
 const FullGameView = (props: GameProps) => {
 
   const gameId: string = props.gameId;
@@ -637,6 +679,22 @@ const FullGameView = (props: GameProps) => {
     },
     [snapshot]
   );
+
+  useEffect(
+    () => {
+      if (connectionState && connectionState.val() === true) {
+        console.log("We are online!");
+        // We are online!
+        // Register an ondisconnect,
+        // Set my status to online.
+        const playerRef = child(gameRef, `players/${props.userInfo.uid}`);
+        handleLoginStuff(playerRef);
+
+      }
+
+    },
+    [connectionState]
+  )
   if (error) {
     return <ErrorScreen />;
   } else if (loading || snapshot!.val() === null) {
