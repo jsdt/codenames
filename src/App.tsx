@@ -458,12 +458,20 @@ const LobbyView = (p: LobbyProps) => {
   return (
 
     <div>
+      <Box sx={{display: "flex", flexDirection: 'row'}}>
+
       {
-        (team !== undefined && p.teamsLocked) ||
-        <Select<string> labelId="initial-team-selector" onChange={(e) => { p.setTeam(e.target.value as Team); }} value={p.players.get(p.userInfo.uid)?.team}>
+
+        (team !== undefined && p.teamsLocked) || <Box flexGrow={1}>
+          <FormControl>
+
+        <Select<string> labelId="initial-team-selector" onChange={(e) => { p.setTeam(e.target.value as Team); }} value={p.players.get(p.userInfo.uid)?.team} style={{height: 60}}>
           <MenuItem value="red"> Red </MenuItem>
           <MenuItem value="blue"> Blue </MenuItem>
         </Select>
+        <FormHelperText>Select your team</FormHelperText>
+        </FormControl>
+        </Box>
       }
       {
         canVolunteer && <div>
@@ -474,9 +482,15 @@ const LobbyView = (p: LobbyProps) => {
       {
         // TODO: ensure both teams are nonempty.
         team && !p.teamsLocked &&
-        <Button onClick={p.lockTeams}>
-          Choose Spymasters
+        <Box flexGrow={1}>
+        <FormControl>
+
+        <Button onClick={p.lockTeams} style={{height: 60}}>
+          Finalize Teams
         </Button>
+        <FormHelperText>New players can still join later</FormHelperText>
+        </FormControl>
+        </Box>
       }
       {
         waitingForOtherTeam && <div> Waiting for the other team to choose a spymaster...</div>
@@ -486,6 +500,7 @@ const LobbyView = (p: LobbyProps) => {
           Start Playing
         </Button>
       }
+      </Box>
 
       {p.teamsView}
     </div>
