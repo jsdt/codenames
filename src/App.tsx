@@ -418,7 +418,7 @@ const TeamList = (p: TeamListProps) => {
   const filteredPlayers = Array.from(p.players.entries()).filter(([_, playerInfo]) => { return playerInfo.team === p.team; });
   return (
 
-    <List style={{ maxHeight: '100%', overflow: 'auto' }} subheader={
+    <List dense disablePadding style={{ maxHeight: '100%', overflow: 'auto' }} subheader={
       <ListSubheader>
         {`${p.team} team`}
       </ListSubheader>
@@ -427,7 +427,7 @@ const TeamList = (p: TeamListProps) => {
 
         {
           filteredPlayers.map(([key, playerInfo]) => {
-            const typographyProps = isMe(playerInfo) ? {fontWeight: 'bold'} : {};
+            const typographyProps = isMe(playerInfo) ? { fontWeight: 'bold' } : {};
             const tooltip = playerInfo.isOnline ? "Online" : "Offline";
             const suffix = p.spyMaster === playerInfo.uid ? " (spymaster)" : "";
             return (
@@ -437,11 +437,11 @@ const TeamList = (p: TeamListProps) => {
                   {/* if isMe(playerInfo), make it bold */}
                   <ListItemIcon>
                     <Tooltip title={tooltip} >
-                    {playerInfo.isOnline ? <WifiIcon/> : <WifiOffIcon/>}
-                      </Tooltip>
+                      {playerInfo.isOnline ? <WifiIcon /> : <WifiOffIcon />}
+                    </Tooltip>
                   </ListItemIcon>
 
-                  <ListItemText primaryTypographyProps={typographyProps} primary={ playerInfo.displayName + suffix} />
+                  <ListItemText primaryTypographyProps={typographyProps} primary={playerInfo.displayName + suffix} />
                 </ListItem> </Collapse>);
           })
         }
@@ -458,14 +458,14 @@ interface TeamsViewProps {
 
 const TeamsView = (p: TeamsViewProps) => {
   return (
-      <Box sx={{maxHeight: '25vh', display: "flex", flexDirection: 'row'}}>
-          <Box border={2} borderColor={"error.main"} flexGrow={1}>
-            <TeamList userInfo={p.userInfo} players={p.players} team="red" spyMaster={p.spyMasters.get("red")} />
-          </Box>
-          <Box border={2} borderColor={"primary.main"} flexGrow={1}>
-            <TeamList userInfo={p.userInfo} players={p.players} team="blue" spyMaster={p.spyMasters.get("blue")} />
-          </Box>
+    <Box sx={{ maxHeight: '25vh', display: "flex", flexDirection: 'row' }}>
+      <Box border={2} borderColor={"error.main"} flexGrow={1}>
+        <TeamList userInfo={p.userInfo} players={p.players} team="red" spyMaster={p.spyMasters.get("red")} />
       </Box>
+      <Box border={2} borderColor={"primary.main"} flexGrow={1}>
+        <TeamList userInfo={p.userInfo} players={p.players} team="blue" spyMaster={p.spyMasters.get("blue")} />
+      </Box>
+    </Box>
   );
 }
 
@@ -488,48 +488,48 @@ const LobbyView = (p: LobbyProps) => {
   return (
 
     <div>
-      <Box sx={{display: "flex", flexDirection: 'row'}}>
+      <Box sx={{ display: "flex", flexDirection: 'row' }}>
 
-      {
+        {
 
-        (team !== undefined && p.teamsLocked) || <Box flexGrow={1}>
-          <FormControl>
+          (team !== undefined && p.teamsLocked) || <Box flexGrow={1}>
+            <FormControl>
 
-        <Select<string> labelId="initial-team-selector" onChange={(e) => { p.setTeam(e.target.value as Team); }} value={p.players.get(p.userInfo.uid)?.team} style={{height: 60}}>
-          <MenuItem value="red"> Red </MenuItem>
-          <MenuItem value="blue"> Blue </MenuItem>
-        </Select>
-        <FormHelperText>Select your team</FormHelperText>
-        </FormControl>
-        </Box>
-      }
-      {
-        canVolunteer && <div>
-          {`Your team needs a spymaster!`} <Button onClick={() => { makeSpyMaster(p.gameRef, myId, team!); }}>Volunteer</Button>
+              <Select<string> labelId="initial-team-selector" onChange={(e) => { p.setTeam(e.target.value as Team); }} value={p.players.get(p.userInfo.uid)?.team} style={{ height: 60 }}>
+                <MenuItem value="red"> Red </MenuItem>
+                <MenuItem value="blue"> Blue </MenuItem>
+              </Select>
+              <FormHelperText>Select your team</FormHelperText>
+            </FormControl>
+          </Box>
+        }
+        {
+          canVolunteer && <div>
+            {`Your team needs a spymaster!`} <Button onClick={() => { makeSpyMaster(p.gameRef, myId, team!); }}>Volunteer</Button>
 
-        </div>
-      }
-      {
-        // TODO: ensure both teams are nonempty.
-        team && !p.teamsLocked &&
-        <Box flexGrow={1}>
-        <FormControl>
+          </div>
+        }
+        {
+          // TODO: ensure both teams are nonempty.
+          team && !p.teamsLocked &&
+          <Box flexGrow={1}>
+            <FormControl>
 
-        <Button onClick={p.lockTeams} style={{height: 60}}>
-          Finalize Teams
-        </Button>
-        <FormHelperText>New players can still join later</FormHelperText>
-        </FormControl>
-        </Box>
-      }
-      {
-        waitingForOtherTeam && <div> Waiting for the other team to choose a spymaster...</div>
-      }
-      {canBegin &&
-        <Button onClick={() => { startGame(p.gameRef); }}>
-          Start Playing
-        </Button>
-      }
+              <Button onClick={p.lockTeams} style={{ height: 60 }}>
+                Finalize Teams
+              </Button>
+              <FormHelperText>New players can still join later</FormHelperText>
+            </FormControl>
+          </Box>
+        }
+        {
+          waitingForOtherTeam && <div> Waiting for the other team to choose a spymaster...</div>
+        }
+        {canBegin &&
+          <Button onClick={() => { startGame(p.gameRef); }}>
+            Start Playing
+          </Button>
+        }
       </Box>
 
       {p.teamsView}
@@ -566,21 +566,38 @@ interface ClueProps {
 
 const ClueForm = (props: ClueProps) => {
   const [word, setWord] = useState("");
+  const [errors, setErrors] = useState({word: "", number: ""});
   const [number, setNumber] = useState("");
   const onSubmit = () => {
-    props.onClue(word, parseInt(number));
+    var hasErrors = false;
+    const errors = {word: "", number: ""};
+    const asInt = parseInt(number);
+    if (!(asInt >= 0)) {
+      errors.number = "Must be a non-negative number"
+      hasErrors = true;
+    }
+    if (!word) {
+      errors.word = "Required"
+      hasErrors = true;
+    } else if (word.includes(' ')) {
+      errors.word = "Clue must be one word"
+      hasErrors = true;
+    }
+    setErrors(errors);
+    if (!hasErrors) {
+      props.onClue(word, parseInt(number));
+    }
   }
+
   return (
     <div>
       Give your team a clue:
       <form onSubmit={onSubmit}>
         <FormControl sx={{ m: 1, minWidth: 120 }}>
-          <TextField required placeholder="Clue Word" type="text" label="Clue" value={word} onChange={(e) => { setWord(e.target.value); }} />
-          <FormHelperText>Enter the clue word.</FormHelperText>
+          <TextField required placeholder="Clue Word" type="text" label="Clue" value={word} onChange={(e) => { setWord(e.target.value); }} error={errors.word.length > 0} helperText={errors.word || "Enter a clue word"}/>
         </FormControl>
         <FormControl sx={{ m: 1, minWidth: 120 }}>
-          <TextField inputProps={{ inputMode: 'numeric', pattern: '[0-9]*' }} required placeholder="Number" type="text" label="Number" value={number} onChange={(e) => { setNumber(e.target.value); }} />
-          <FormHelperText>How many words should they guess?</FormHelperText>
+          <TextField inputProps={{ inputMode: 'numeric', pattern: '[0-9]*' }} required placeholder="Number" type="text" label="Number" value={number} onChange={(e) => { setNumber(e.target.value); }} error={errors.number.length > 0} helperText={errors.number || "How many words should they guess?"} />
         </FormControl>
         <Button onClick={onSubmit}>
           Give Clue
@@ -602,18 +619,18 @@ const HistoryTimeline = (props: HistoryProps) => {
   const reversedClues = [...props.history];
   reversedClues.reverse();
   function keyFromIndex(index: number): number {
-    return reversedClues.length - index ;
+    return reversedClues.length - index;
   }
   return (
     <React.Fragment>
       <Timeline position="left">
         <TimelineItem>
 
-        <TimelineSeparator>
+          <TimelineSeparator>
 
-        <TimelineConnector/>
-        </TimelineSeparator>
-        <TimelineContent></TimelineContent>
+            <TimelineConnector />
+          </TimelineSeparator>
+          <TimelineContent></TimelineContent>
         </TimelineItem>
         {
           reversedClues.map((clue, i) => {
@@ -641,14 +658,23 @@ const HistoryTimeline = (props: HistoryProps) => {
 
 }
 
+function otherTeam(t: Team): Team {
+  if (t === "red") {
+    return "blue";
+  } else {
+    return "red";
+  }
+
+}
+
 const isOfflineForDatabase = {
-    isOnline: false,
-    last_changed: serverTimestamp(),
+  isOnline: false,
+  last_changed: serverTimestamp(),
 };
 
 const isOnlineForDatabase = {
-    isOnline: true,
-    last_changed: serverTimestamp(),
+  isOnline: true,
+  last_changed: serverTimestamp(),
 };
 
 const FullGameView = (props: GameProps) => {
@@ -663,7 +689,7 @@ const FullGameView = (props: GameProps) => {
 
   useEffect(
     () => {
-      if (loading || error) {
+      if (snapshot === undefined) {
         return;
       }
       if (snapshot!.val() === null) {
@@ -720,7 +746,8 @@ const FullGameView = (props: GameProps) => {
   // We set the spymaster for the current round, so it is reset if someone starts a new game.
   // const isSpyMaster: boolean = spyMasterRound !== null && gameState != null && spyMasterRound === gameState!.round_id;
   const isSpyMaster: boolean = Array.from(roomState.spyMasters.values()).includes(props.userInfo.uid);
-  const isMyTurn: boolean = gameState.current_turn === roomState.players.get(props.userInfo.uid)?.team;
+  const myTeam: Team = roomState.players.get(props.userInfo.uid)?.team!;
+  const isMyTurn: boolean = gameState.current_turn === myTeam;
   const enableButtons: boolean = isMyTurn && gameState.current_clue !== undefined;
   const shouldGiveClue: boolean = isSpyMaster && isMyTurn && gameState.current_clue === undefined && !gameState.winner;
 
@@ -777,12 +804,16 @@ const FullGameView = (props: GameProps) => {
     }
   }
 
-  function currentClueThing(): string {
+  function currentClueThing(): JSX.Element {
+    if (shouldGiveClue) {
+      return <ClueForm onClue={(word: string, number: number) => { giveClue(gameRef, word, number, gameState.current_turn); }} />;
+    }
     if (gameState.current_clue) {
-      return `The current clue is "${gameState.current_clue!.word}" for ${gameState.current_clue!.number}. Up to ${gameState.current_clue!.number + 1 - gameState.current_clue!.guesses.length} guesses left.`;
+      return <div> `The current clue is "${gameState.current_clue!.word}" for ${gameState.current_clue!.number}. Up to ${gameState.current_clue!.number + 1 - gameState.current_clue!.guesses.length} guesses left.` </div>;
     } else {
-      const waitingFor = shouldGiveClue ? "you" : "other spymaster";
-      return `Waiting for ${waitingFor} to give a clue...`;
+      const otherSpyUid = roomState.spyMasters.get(otherTeam(myTeam))!;
+      const spyName = roomState.players.get(otherSpyUid)?.displayName;
+      return <div> {`Waiting for ${spyName} to give a clue...`} </div>;
     }
   }
 
@@ -790,19 +821,19 @@ const FullGameView = (props: GameProps) => {
     <div>
       {error && <strong>Error: {error}</strong>}
       {loading && <span>List: Loading...</span> /* TODO: Add skeleton buttons while loading */}
-          <Box sx={{display: 'flex', flexDirection: 'row', justifyContent: 'space-evenly', width: '100%'}}>
-            <Box sx={{width: '30%'}} border={1}>
-              {currentClueThing()}
-            </Box>
-          <Box  sx={{width: '30%', textAlign: 'center'}} border={1}>
-            {gameState && gameState!.winner !== null && `The ${gameState!.winner} team won!` || `It is the ${gameState!.current_turn} team's turn!`}
-          </Box>
-          <Box  sx={{width: '30%', textAlign: 'right'}} border={1}>
-            {score !== null && scoreString(score!)}
-            </Box>
-            </Box>
-            {
-            }
+      <Box sx={{ display: 'flex', flexDirection: 'row', justifyContent: 'space-between', width: '100%' }}>
+        <Box sx={{ width: '30%', textAlign: 'left' }} border={1}>
+          {gameState && gameState!.winner !== null && `The ${gameState!.winner} team won!` || `It is the ${gameState!.current_turn} team's turn!`}
+        </Box>
+        <Box sx={{ width: '30%', textAlign: 'right' }} border={1}>
+          {score !== null && scoreString(score!)}
+        </Box>
+      </Box>
+      <Box sx={{ mx: 'auto', textAlign: 'center', height: '125px', alignItems: 'center' }} border={1}>
+        {currentClueThing()}
+      </Box>
+      {
+      }
       <Divider />
       {
         !loading && snapshot && (
@@ -819,9 +850,6 @@ const FullGameView = (props: GameProps) => {
               */
       }
       {gameState && gameState!.winner === null && <BsButton disabled={!enableButtons} onClick={endTurn}>End Turn</BsButton>}
-      {
-        shouldGiveClue && <ClueForm onClue={(word: string, number: number) => { giveClue(gameRef, word, number, gameState.current_turn); }} />
-      }
       <HistoryTimeline history={gameState.history} />
       <div>
         <BsButton onClick={() => { startNewRound(gameRef); }}>
@@ -829,10 +857,10 @@ const FullGameView = (props: GameProps) => {
         </BsButton>
       </div>
       <div>
-        <Box sx={{height: '10%'}}>
+        <Box sx={{ height: '10%' }}>
 
-      {teamsView}
-      </Box>
+          {teamsView}
+        </Box>
       </div>
       <div>
         <p>Connection state: {JSON.stringify(connectionState)}</p>
